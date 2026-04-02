@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLSK Ventures — Odoo ERP Architecture</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#080D1A; overflow:hidden; font-family:'Segoe UI',system-ui,sans-serif; user-select:none; }
+svg { display:block; }
+@keyframes flow { to { stroke-dashoffset:-32; } }
+.panel {
+  position:fixed;
+  background:rgba(8,13,26,0.92);
+  backdrop-filter:blur(18px);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:13px;
+}
+#title-bar { top:20px; left:20px; padding:13px 18px; pointer-events:none; }
+#title-bar h1 { font-size:16px; font-weight:700; color:#fff; letter-spacing:-0.03em; }
+#title-bar p  { font-size:10px; color:rgba(255,255,255,0.28); letter-spacing:0.12em; text-transform:uppercase; margin-top:3px; }
+#hint { top:20px; right:20px; padding:8px 13px; font-size:10px; color:rgba(255,255,255,0.22); line-height:2; text-align:right; pointer-events:none; }
+#legend { bottom:20px; left:20px; padding:12px 15px; }
+#legend h4 { font-size:9px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:rgba(255,255,255,0.22); margin-bottom:9px; }
+.leg-row { display:flex; align-items:center; gap:8px; font-size:11px; color:rgba(255,255,255,0.55); margin-bottom:5px; }
+.leg-row:last-child { margin-bottom:0; }
+.swatch { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+#conn-key { bottom:20px; right:20px; padding:11px 15px; pointer-events:none; }
+#conn-key h4 { font-size:9px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:rgba(255,255,255,0.22); margin-bottom:9px; }
+.ck-row { display:flex; align-items:center; gap:10px; font-size:11px; color:rgba(255,255,255,0.45); margin-bottom:5px; }
+.ck-row:last-child { margin-bottom:0; }
+.ck-solid  { width:28px; height:2px; background:rgba(255,255,255,0.35); }
+.ck-dashed { width:28px; height:0; border-top:2px dashed rgba(255,255,255,0.3); }
+#tooltip {
+  position:fixed; pointer-events:none; z-index:9999; opacity:0; transition:opacity .12s;
+  background:rgba(8,13,26,0.97); backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,0.1); border-radius:11px;
+  padding:13px 16px; max-width:280px; box-shadow:0 16px 48px rgba(0,0,0,0.6);
+}
+#tooltip.show { opacity:1; }
+#tt-badge { font-size:9px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:5px; }
+#tt-name  { font-size:13px; font-weight:700; color:#fff; margin-bottom:5px; }
+#tt-desc  { font-size:11px; color:rgba(255,255,255,0.5); line-height:1.55; }
+</style>
+</head>
+<body>
+
+<svg id="svg" style="width:100vw;height:100vh;cursor:grab;">
+  <defs id="defs">
+    <pattern id="dots" x="0" y="0" width="34" height="34" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="0.7" fill="rgba(255,255,255,0.035)"/>
+    </pattern>
+  </defs>
+  <rect id="bg1" x="0" y="0" width="100%" height="100%" fill="#080D1A"/>
+  <rect id="bg2" x="0" y="0" width="100%" height="100%" fill="url(#dots)"/>
+  <g id="canvas">
+    <g id="glows"></g>
+    <g id="zone-labels"></g>
+    <g id="node-layer"></g>
+    <g id="conn-layer"></g>
+  </g>
+</svg>
+
+<div class="panel" id="title-bar">
+  <h1>SLSK Ventures — Odoo ERP</h1>
+  <p>Module Architecture · Ref: CalibtOS-SLSK-2026-001</p>
+</div>
+<div class="panel" id="hint">Scroll to zoom · Drag to pan<br>Hover to trace connections</div>
+<div class="panel" id="legend"><h4>Categories</h4></div>
+<div class="panel" id="conn-key">
+  <h4>Connection Types</h4>
+  <div class="ck-row"><div class="ck-solid"></div> Document / data flow</div>
+  <div class="ck-row"><div class="ck-dashed"></div> Trigger / signal</div>
+</div>
+<div id="tooltip">
+  <div id="tt-badge"></div>
+  <div id="tt-name"></div>
+  <div id="tt-desc"></div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ─── Palette ──────────────────────────────────────────────────────────────────
+var CATS = {
+  external:      { label: 'External Systems',       color: '#64748B' },
+  core:          { label: 'Core / Base',             color: '#94A3B8' },
+  sales:         { label: 'Sales & Amazon',          color: '#3B82F6' },
+  purchase:      { label: 'Purchase',                color: '#F97316' },
+  inventory:     { label: 'Inventory & Warehouse',   color: '#10B981' },
+  manufacturing: { label: 'Manufacturing & Quality', color: '#8B5CF6' },
+  accounting:    { label: 'Accounting & Finance',    color: '#EF4444' }
+};
+
+// ─── Modules ──────────────────────────────────────────────────────────────────
+//
+//  4-row grid — canvas ~1560 × 690
+//
+//  Row 1 (cy=110):  AmazonExt · AmazonConn · Sales · FbaInbound · Contacts · Discuss · Documents
+//  Row 2 (cy=285):  SuppExt   · Purchase   · Delivery · LandedC · Inventory · Replenishment · Accounting
+//  Row 3 (cy=455):  Subcontracting · Manufacturing · Quality · Scrap · AnalyticAcctg · BankReconcil
+//  Row 4 (cy=620):  BoM · UoM · Returns · TaxReporting · BankExt
+//
+var MODS = [
+
+  // ── External entities ──────────────────────────────────────────────────────
+  { id:'amazon_ext',      cat:'external',      cx:120,  cy:110, w:155, h:70, external:true,
+    name:'Amazon\n10 EU Marketplaces',
+    desc:'SLSK\'s 10 storefronts: DE, FR, UK, IT, ES, NL, BE, SE, IE, PL — plus Amazon.fr registered under FR SIREN 914935374. Source of all order, settlement and FBA inventory adjustment data.' },
+
+  { id:'suppliers_ext',   cat:'external',      cx:120,  cy:285, w:155, h:70, external:true,
+    name:'Suppliers\nEU Seeds + Packaging',
+    desc:'Organic seed suppliers across Europe (Italy confirmed; also NL, DE, PL and others) + Asian packaging suppliers. Multiple EU origins: each supplier needs country-of-origin, organic certification body, and species-specific UoM convention recorded in Odoo.' },
+
+  { id:'bank_ext',        cat:'external',      cx:1450, cy:620, w:145, h:60, external:true,
+    name:'Bank Accounts\nEUR · GBP · SEK · PLN',
+    desc:'SLSK settlement bank accounts per currency. Amazon pays bi-weekly per marketplace. Bank statements imported via Odoo bank sync or CSV. FX rate at settlement date applied for multi-currency reconciliation.' },
+
+  // ── Sales & Amazon ─────────────────────────────────────────────────────────
+  { id:'amazon_connector',cat:'sales',         cx:355,  cy:110, w:175, h:54, big:true,
+    name:'Amazon Connector',
+    desc:'SP-API bridge: order sync, inventory sync, settlement import, FBA inbound plan creation — all 10 accounts. GAP: Settlement transaction-type→GL mapping required (50+ types: referral fees, FBA storage, A-to-Z claims, promotions). UK Marketplace Facilitator post-Brexit fiscal position also needed.' },
+
+  { id:'sales',           cat:'sales',         cx:575,  cy:110, w:145, h:46,
+    name:'Sales',
+    desc:'Processes inbound Amazon orders; triggers delivery orders and customer invoices. GAP: Fiscal position auto-selection must distinguish OSS-eligible cross-border sales from locally-taxed sales when FBA inventory is stored in the destination country (PAN-EU FBA complexity).' },
+
+  { id:'fba_inbound',     cat:'sales',         cx:775,  cy:110, w:160, h:46,
+    name:'FBA Inbound',
+    desc:'Creates and tracks FBA Inbound Shipment Plans for all 10 Amazon FCs. GAP: Standard Connector creates basic plans only. Custom logic needed to auto-detect Amazon FC split assignments, generate PRE labels, and reconcile Amazon-received qty vs. shipped qty to auto-trigger discrepancy claims.' },
+
+  // ── Core / Base ────────────────────────────────────────────────────────────
+  { id:'contacts',        cat:'core',          cx:1005, cy:110, w:144, h:46,
+    name:'Contacts',
+    desc:'res.partner master shared by all modules. CUSTOMISATION: Add fields for EU organic cert code per supplier (LU-BIO-04), 3PL SLA parameters, Amazon seller account ID, and country-of-origin per supplier — essential now that seeds come from multiple EU countries.' },
+
+  { id:'discuss',         cat:'core',          cx:1215, cy:110, w:134, h:44,
+    name:'Discuss',
+    desc:'Internal chat & automated notifications. SETUP: Configure scheduled actions for: QC failures (immediate alert), settlement anomalies (finance ping), VAT filing deadlines (2-week advance), FBA stock below safety level (reorder team). Keeps 4–6 person team in sync.' },
+
+  { id:'documents',       cat:'core',          cx:1435, cy:110, w:140, h:44,
+    name:'Documents',
+    desc:'Files linked directly to Odoo records. REQUIRED: Attach EU organic certs (LU-BIO-04) at both supplier level AND each incoming lot. Phytosanitary certificates per seed shipment PO. 3PL batch records per MO. GAP: Enforce naming convention via document types; missing cert should block lot release in Quality.' },
+
+  // ── Purchase ───────────────────────────────────────────────────────────────
+  { id:'purchase',        cat:'purchase',      cx:355,  cy:285, w:165, h:54, big:true,
+    name:'Purchase',
+    desc:'Demand-driven POs to EU seed suppliers and Asian packaging suppliers. CUSTOMISATION: Dual-UoM PO lines (kg and per-seed-count on the same PO). Validation rule: block count-based PO lines for any species without a validated weight-per-seed constant in its BOM. Multi-supplier routing rules per species.' },
+
+  // ── Inventory & Warehouse ──────────────────────────────────────────────────
+  { id:'delivery',        cat:'inventory',     cx:575,  cy:285, w:155, h:46,
+    name:'Delivery / Carrier',
+    desc:'Tracks physical shipments: EU seeds→3PL, Asian packaging→3PL, 3PL→FBA inbound. GAP: Carrier API integration (DHL/DPD for EU parcels; freight forwarder for sea containers) must be configured or entered manually. Custom ETA field on each PO line drives dynamic replenishment lead times.' },
+
+  { id:'landed_costs',    cat:'inventory',     cx:780,  cy:285, w:152, h:46,
+    name:'Landed Costs',
+    desc:'Allocates import freight, customs duty and insurance to each SKU unit cost. IMPROVEMENT: Split by cost type (sea freight / air freight / customs duty / insurance) as separate lines for accurate COGS breakdown. Auto-apply rule for all non-EU purchase receipts (Asian packaging only).' },
+
+  { id:'inventory',       cat:'inventory',     cx:1005, cy:285, w:165, h:56, big:true,
+    name:'Inventory',
+    desc:'Central stock hub: virtual 3PL location, 10 FBA virtual locations, lot/batch tracking, reorder rules. CUSTOMISATION: Species-specific expiry rules on seed lots. Custom adjustment reason codes (FBA damaged, FBA lost, yield waste). Split 3PL virtual location into: raw seeds / packaging / WIP / finished-not-shipped.' },
+
+  { id:'replenishment',   cat:'inventory',     cx:1230, cy:285, w:155, h:46,
+    name:'Replenishment',
+    desc:'Min/max and MTO reorder rules for all 10 FBA virtual locations plus 3PL safety stock. CUSTOMISATION: Dynamic safety-stock multiplier from FBA sales velocity (fed by Amazon Connector). Lead-time tiers: EU seeds ~14d, Asian packaging ~60d, 3PL assembly ~5d. MTO rules trigger sub-contracting MOs, not just POs.' },
+
+  // ── Accounting ─────────────────────────────────────────────────────────────
+  { id:'accounting',      cat:'accounting',    cx:1450, cy:285, w:165, h:56, big:true,
+    name:'Accounting',
+    desc:'Settlement reconciliation; COGS per SKU; EU VAT/OSS; multi-currency EUR/GBP/SEK/PLN. CRITICAL GAPS: (1) SKR03 vs. SKR04 COA must be chosen before go-live. (2) French entity (SIREN 914935374) type — branch vs. subsidiary — must be resolved. (3) §15a UStG VAT reversal on yield waste. (4) FX revaluation at each month-end.' },
+
+  // ── Manufacturing cluster ──────────────────────────────────────────────────
+  { id:'subcontracting',  cat:'manufacturing', cx:355,  cy:455, w:168, h:54, big:true,
+    name:'Sub-contracting',
+    desc:'3PL assembly as sub-contracting MO: seeds + packaging flow OUT to 3PL, finished packs flow IN. Replaces Work Centers model — the correct Odoo architecture for external assembly. CUSTOMISATION: Sub-contractor service-fee PO auto-generated per MO. Custom 3PL batch-reference field on each MO.' },
+
+  { id:'manufacturing',   cat:'manufacturing', cx:585,  cy:455, w:165, h:54, big:true,
+    name:'Manufacturing',
+    desc:'Sub-contracting MOs track seed kg consumed, units produced, yield loss per BOM. GAPS: (1) Loss buffer % (5% illustrative) must be validated across ≥3 pilot packing runs before go-live. (2) Per-species weight-per-seed constants must be measured — not estimated. (3) WIP accounting entries (seeds→WIP→finished goods) require explicit GL mapping.' },
+
+  { id:'quality',         cat:'manufacturing', cx:810,  cy:455, w:155, h:46,
+    name:'Quality Control',
+    desc:'4 QC checkpoints: seed receipt, packaging receipt, post-assembly, FBA inbound prep. CUSTOMISATION: Numeric fields for germination % and fill weight on QCP (not just pass/fail binary). Auto-escalation email to 3PL supervisor + SLSK management on failure. Defect-rate trend dashboard per EU supplier per species.' },
+
+  { id:'scrap',           cat:'inventory',     cx:1005, cy:455, w:140, h:46,
+    name:'Scrap / Write-offs',
+    desc:'Inventory write-offs for: yield waste, 3PL or FBA damage, expired seed lots. CUSTOMISATION: Custom scrap reason codes mapped to separate GL accounts — yield waste→COGS, FBA damage→Amazon reimbursement receivable, expiry→stock obsolescence expense. §15a UStG VAT reversal trigger on destroyed-goods orders.' },
+
+  { id:'analytic_acctg',  cat:'accounting',    cx:1230, cy:455, w:168, h:46,
+    name:'Analytic Accounting',
+    desc:'Tags every journal entry for per-marketplace and per-brand P&L — required to deliver the stated ROI promise. REQUIRED SETUP: Two analytic dimensions: Marketplace (DE/FR/UK/IT/ES/NL/BE/SE/IE/PL) and Brand (ZenGreens / VEVOX / SLSK Games). Amazon Connector must auto-tag each settlement entry by source marketplace.' },
+
+  { id:'bank_reconcil',   cat:'accounting',    cx:1450, cy:455, w:165, h:46,
+    name:'Bank Reconciliation',
+    desc:'Matches Amazon bi-weekly settlement payouts to bank credits in 4 currencies. SETUP: One Odoo bank journal per currency (EUR, GBP, SEK, PLN). FX revaluation wizard at month-end for unrealized gains/losses on open positions. Bank feed via Odoo bank sync or CSV import per account.' },
+
+  // ── Manufacturing sub-modules ──────────────────────────────────────────────
+  { id:'bom',             cat:'manufacturing', cx:355,  cy:620, w:150, h:44,
+    name:'Bill of Materials',
+    desc:'RM (seed kg) + PM (packaging) + M (3PL labour) per SKU; 3 size variants per species (10g, 200g, 500g). CUSTOMISATION: Per-BOM weight-per-seed constant field (validated by pilot runs). BOM version control — lock historical MOs against retroactive recalculation when loss buffer changes after pilot data.' },
+
+  { id:'uom',             cat:'manufacturing', cx:585,  cy:620, w:150, h:44,
+    name:'Units of Measure',
+    desc:'3D UoM: kg (bulk purchase) ↔ individual seed count (count POs) ↔ consumer pcs (sales). CRITICAL GAP: Odoo standard UoM cannot store per-product conversion factors — a custom field on product.template is required for the species-specific weight-per-seed constant that drives correct conversion at PO receipt and MO consumption.' },
+
+  { id:'returns',         cat:'sales',         cx:810,  cy:620, w:155, h:44,
+    name:'Returns / Credit Notes',
+    desc:'Amazon FBA customer return flow: credit note + reverse stock move + unfulfillable write-off. GAP: Standard Odoo requires manual creation of return delivery + credit note per event. Custom automation from Amazon return notification (via Connector) to create both records — reducing manual work across 10 marketplaces.' },
+
+  { id:'tax_reporting',   cat:'accounting',    cx:1055, cy:620, w:165, h:44,
+    name:'Tax Reporting',
+    desc:'OSS quarterly return, German VAT Voranmeldung, EC Sales List. GAPS: (1) PAN-EU FBA: fiscal position must use fulfillment-origin location (which FC shipped), not just customer country — standard Odoo does not do this automatically. (2) UK: Amazon remits VAT on orders <£135 (Marketplace Facilitator) — Odoo must mark these as zero-rated export.' }
+];
+
+// ─── Connections ──────────────────────────────────────────────────────────────
+var CONNS = [
+
+  // External → Amazon integration
+  { from:'amazon_ext',       to:'amazon_connector',  style:'dashed', label:'SP-API' },
+  { from:'amazon_connector', to:'sales',             style:'solid',  label:'orders' },
+  { from:'amazon_connector', to:'inventory',         style:'solid',  label:'stock sync' },
+  { from:'amazon_connector', to:'accounting',        style:'solid',  label:'settlements',     route:'top' },
+  { from:'amazon_connector', to:'fba_inbound',       style:'solid',  label:'inbound plans' },
+  { from:'amazon_connector', to:'returns',           style:'dashed', label:'return events' },
+  { from:'amazon_connector', to:'replenishment',     style:'dashed', label:'velocity data',    route:'top' },
+  { from:'amazon_connector', to:'bank_reconcil',     style:'dashed', label:'expected payouts', route:'top' },
+  { from:'amazon_connector', to:'contacts',          style:'solid',  label:'customer master' },
+
+  // FBA Inbound & Returns
+  { from:'fba_inbound',      to:'inventory',         style:'solid',  label:'FC receipt' },
+  { from:'returns',          to:'inventory',         style:'solid',  label:'reverse stock' },
+  { from:'returns',          to:'accounting',        style:'solid',  label:'credit note' },
+  { from:'returns',          to:'scrap',             style:'dashed', label:'unfulfillable' },
+
+  // Sales
+  { from:'sales',            to:'inventory',         style:'solid',  label:'delivery order' },
+  { from:'sales',            to:'accounting',        style:'solid',  label:'invoice',         route:'top' },
+
+  // Supplier → Purchase → Delivery → Inventory
+  { from:'suppliers_ext',    to:'purchase',          style:'dashed', label:'PO / delivery' },
+  { from:'suppliers_ext',    to:'delivery',          style:'dashed', label:'carrier booking' },
+  { from:'purchase',         to:'inventory',         style:'solid',  label:'goods receipt' },
+  { from:'purchase',         to:'accounting',        style:'solid',  label:'vendor bill' },
+  { from:'purchase',         to:'contacts',          style:'solid',  label:'vendor master' },
+  { from:'purchase',         to:'landed_costs',      style:'dashed', label:'freight / duty' },
+  { from:'purchase',         to:'discuss',           style:'dashed', label:'PO approvals',    route:'top' },
+  { from:'delivery',         to:'inventory',         style:'solid',  label:'goods-in confirmed' },
+  { from:'delivery',         to:'purchase',          style:'dashed', label:'ETA update' },
+
+  // Landed Costs
+  { from:'landed_costs',     to:'inventory',         style:'solid',  label:'unit cost adjust' },
+  { from:'landed_costs',     to:'accounting',        style:'solid',  label:'journal entry' },
+
+  // Inventory hub
+  { from:'inventory',        to:'manufacturing',     style:'solid',  label:'components' },
+  { from:'inventory',        to:'accounting',        style:'solid',  label:'stock valuation' },
+  { from:'inventory',        to:'discuss',           style:'dashed', label:'reorder alerts' },
+  { from:'inventory',        to:'replenishment',     style:'dashed', label:'stock levels' },
+
+  // Replenishment
+  { from:'replenishment',    to:'purchase',          style:'dashed', label:'demand PO' },
+  { from:'replenishment',    to:'manufacturing',     style:'dashed', label:'MO trigger' },
+
+  // Sub-contracting → Manufacturing
+  { from:'subcontracting',   to:'manufacturing',     style:'solid',  label:'3PL MO' },
+  { from:'manufacturing',    to:'inventory',         style:'solid',  label:'finished goods' },
+  { from:'manufacturing',    to:'accounting',        style:'solid',  label:'MO cost / WIP',  route:'top' },
+  { from:'manufacturing',    to:'quality',           style:'dashed', label:'trigger QC' },
+  { from:'manufacturing',    to:'scrap',             style:'solid',  label:'yield waste' },
+
+  // BoM / UoM
+  { from:'bom',              to:'manufacturing',     style:'solid',  label:'recipe' },
+  { from:'uom',              to:'bom',               style:'solid',  label:'conversions' },
+
+  // Quality
+  { from:'quality',          to:'manufacturing',     style:'dashed', label:'QC checkpoints' },
+  { from:'quality',          to:'inventory',         style:'dashed', label:'lot / batch track' },
+  { from:'quality',          to:'scrap',             style:'solid',  label:'rejected goods' },
+  { from:'quality',          to:'discuss',           style:'dashed', label:'QC alerts' },
+
+  // Scrap
+  { from:'scrap',            to:'accounting',        style:'solid',  label:'write-off entry' },
+
+  // Contacts
+  { from:'contacts',         to:'accounting',        style:'dashed', label:'invoice partner' },
+
+  // Accounting output side
+  { from:'accounting',       to:'analytic_acctg',    style:'solid',  label:'journal tagging' },
+  { from:'accounting',       to:'tax_reporting',     style:'solid',  label:'VAT data' },
+  { from:'accounting',       to:'discuss',           style:'dashed', label:'finance alerts' },
+
+  // Analytic Accounting
+  { from:'analytic_acctg',   to:'accounting',        style:'dashed', label:'P&L dimensions' },
+
+  // Bank Reconciliation
+  { from:'bank_ext',         to:'bank_reconcil',     style:'dashed', label:'bank feed' },
+  { from:'bank_reconcil',    to:'accounting',        style:'solid',  label:'matched entries' }
+];
+
+// ─── SVG namespace helper ─────────────────────────────────────────────────────
+var SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(tag, attrs) {
+  var el = document.createElementNS(SVG_NS, tag);
+  if (attrs) {
+    for (var k in attrs) {
+      if (Object.prototype.hasOwnProperty.call(attrs, k)) el.setAttribute(k, attrs[k]);
+    }
+  }
+  return el;
+}
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+function rgba(hex, a) {
+  var c = hexToRgb(hex);
+  return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+}
+
+// ─── Orthogonal path builder ──────────────────────────────────────────────────
+// Same-row:
+//   - adjacent modules: direct straight segment
+//   - non-adjacent modules: routed via assigned elbowY lane (staggered later)
+// Cross-row:
+//   - 3-segment elbow at pre-computed elbowY.
+function makePath(p1, p2, elbowY) {
+  if (Math.abs(p2.y - p1.y) < 30) {
+    if (elbowY == null) return 'M'+p1.x+','+p1.y+' L'+p2.x+','+p2.y;
+    return 'M'+p1.x+','+p1.y+' L'+p1.x+','+elbowY+' L'+p2.x+','+elbowY+' L'+p2.x+','+p2.y;
+  }
+  var ey = (elbowY != null) ? elbowY : (p1.y + p2.y) / 2;
+  return 'M'+p1.x+','+p1.y+' L'+p1.x+','+ey+' L'+p2.x+','+ey+' L'+p2.x+','+p2.y;
+}
+
+// Label position: above the routing lane used by the path.
+function labelPos(p1, p2, elbowY) {
+  if (Math.abs(p2.y - p1.y) < 30) {
+    if (elbowY == null) return { x:(p1.x+p2.x)/2, y:p1.y - 9 };
+    return { x:(p1.x+p2.x)/2, y:elbowY - 9 };
+  }
+  var ey = (elbowY != null) ? elbowY : (p1.y + p2.y) / 2;
+  return { x:(p1.x+p2.x)/2, y:ey - 9 };
+}
+
+// ─── Edge exit point from node rectangle ─────────────────────────────────────
+function edgePt(mod, tx, ty) {
+  var hw = mod.w/2+4, hh = mod.h/2+4;
+  var dx = tx-mod.cx, dy = ty-mod.cy;
+  var L = Math.sqrt(dx*dx+dy*dy) || 1;
+  var sx = dx===0 ? 1e9 : Math.abs(hw/dx);
+  var sy = dy===0 ? 1e9 : Math.abs(hh/dy);
+  var s = Math.min(sx, sy);
+  return { x: mod.cx+dx*s, y: mod.cy+dy*s };
+}
+
+// ─── DOM refs ─────────────────────────────────────────────────────────────────
+var mainSvg   = document.getElementById('svg');
+var defs      = document.getElementById('defs');
+var canvasGrp = document.getElementById('canvas');
+var glowsGrp  = document.getElementById('glows');
+var zlabelGrp = document.getElementById('zone-labels');
+var connGrp   = document.getElementById('conn-layer');
+var nodeGrp   = document.getElementById('node-layer');
+var tooltip   = document.getElementById('tooltip');
+var ttBadge   = document.getElementById('tt-badge');
+var ttName    = document.getElementById('tt-name');
+var ttDesc    = document.getElementById('tt-desc');
+
+var modMap = {};
+for (var i = 0; i < MODS.length; i++) modMap[MODS[i].id] = MODS[i];
+
+// ─── Arrow markers per category ───────────────────────────────────────────────
+for (var catId in CATS) {
+  if (!Object.prototype.hasOwnProperty.call(CATS, catId)) continue;
+  var col = CATS[catId].color;
+  ['arr-'+catId, 'arr-lit-'+catId].forEach(function(mid) {
+    var mkr = svgEl('marker', { id:mid, markerWidth:'8', markerHeight:'8',
+      refX:'6', refY:'3', orient:'auto', markerUnits:'strokeWidth' });
+    mkr.appendChild(svgEl('path', { d:'M0,0 L0,6 L8,3 z', fill:col }));
+    defs.appendChild(mkr);
+  });
+}
+
+// ─── Ambient glow blobs ───────────────────────────────────────────────────────
+var glowBlobs = [
+  { cx:1005, cy:285, rx:290, ry:120, color:'#10B981' },
+  { cx:585,  cy:455, rx:260, ry:115, color:'#8B5CF6' },
+  { cx:1450, cy:370, rx:200, ry:180, color:'#EF4444' },
+  { cx:355,  cy:110, rx:195, ry:68,  color:'#3B82F6' },
+  { cx:1200, cy:110, rx:265, ry:65,  color:'#94A3B8' }
+];
+glowBlobs.forEach(function(gb, gi) {
+  var gid = 'glow'+gi;
+  var rg = svgEl('radialGradient', { id:gid, cx:'50%', cy:'50%', r:'50%' });
+  var s0 = svgEl('stop', { offset:'0%' }); s0.setAttribute('stop-color', rgba(gb.color,0.08));
+  var s1 = svgEl('stop', { offset:'100%' }); s1.setAttribute('stop-color', rgba(gb.color,0));
+  rg.appendChild(s0); rg.appendChild(s1); defs.appendChild(rg);
+  glowsGrp.appendChild(svgEl('ellipse',
+    { cx:gb.cx, cy:gb.cy, rx:gb.rx, ry:gb.ry, fill:'url(#'+gid+')' }));
+});
+
+// ─── Zone labels ──────────────────────────────────────────────────────────────
+var zoneLabels = [
+  { text:'AMAZON INTEGRATION',  x:68,   y:58,  color:'#3B82F6' },
+  { text:'CORE / BASE',          x:862,  y:58,  color:'#94A3B8' },
+  { text:'PROCUREMENT',          x:68,   y:228, color:'#F97316' },
+  { text:'OPERATIONS HUB',       x:708,  y:228, color:'#10B981' },
+  { text:'FINANCE',              x:1362, y:228, color:'#EF4444' },
+  { text:'MANUFACTURING & QC',   x:300,  y:400, color:'#8B5CF6' },
+  { text:'FINANCIAL TOOLS',      x:1140, y:400, color:'#EF4444' }
+];
+zoneLabels.forEach(function(zl) {
+  var zt = svgEl('text', {
+    x:zl.x, y:zl.y,
+    'font-family':"'Segoe UI',system-ui,sans-serif",
+    'font-size':'8', 'font-weight':'700', 'letter-spacing':'0.16em',
+    fill:rgba(zl.color, 0.45), 'pointer-events':'none'
+  });
+  zt.textContent = zl.text;
+  zlabelGrp.appendChild(zt);
+});
+
+// ─── Staggered-lane routing pre-computation ──────────────────────────────────
+//
+//  Rows:        R1=110   R2=285   R3=455   R4=620
+//  Node clearance: R1 bottom≈145  R2 top≈257  R2 bottom≈313  R3 top≈428  R3 bottom≈482  R4 top≈590
+//  Corridors (safe ranges):
+//    C12: [150, 257]   C23: [318, 428]   C34: [487, 590]
+//
+//  Lane strategy — each row-pair gets its own Y band INSIDE the corridor:
+//    R1↔R2 (adjacent):  baseY=203, lane=8  → middle of C12
+//    R1↔R3 (skip 1):    baseY=165, lane=5  → top quarter of C12 (clear of R1 bottom ~145)
+//    R1↔R4 (skip 2):    baseY=160, lane=1  → top quarter of C12 (clear of R1 bottom ~145)
+//    R2↔R3 (adjacent):  baseY=373, lane=8  → middle of C23
+//    R2↔R4 (skip 1):    baseY=348, lane=8  → top quarter of C23 (clear of R2 bottom ~313)
+//    R3↔R4 (adjacent):  baseY=537, lane=10 → middle of C34
+//
+var SNAP_ROWS = [110, 285, 455, 620];
+function snapRow(y) {
+  var b = SNAP_ROWS[0];
+  SNAP_ROWS.forEach(function(r){ if (Math.abs(r-y) < Math.abs(b-y)) b=r; });
+  return b;
+}
+var PAIR_CFG = {
+  '110_285': { baseY:203, lane:8  },
+  '110_455': { baseY:165, lane:5  },
+  '110_620': { baseY:160, lane:1  },
+  '285_455': { baseY:373, lane:8  },
+  '285_620': { baseY:348, lane:8  },
+  '455_620': { baseY:537, lane:10 }
+};
+var SAME_ROW_CFG = {
+  '110': { baseY:82,  lane:8  },
+  '285': { baseY:255, lane:7  },
+  '455': { baseY:485, lane:7  },
+  '620': { baseY:648, lane:6  }
+};
+
+// Pass 1 — compute p1, p2 for every connection (skip top-highway routes)
+var connPts = CONNS.map(function(conn) {
+  var fm = modMap[conn.from], tm = modMap[conn.to];
+  if (!fm || !tm) return null;
+  if (conn.route === 'top') {
+    return { topRoute: true, fm: fm, tm: tm, rhs: null };
+  }
+  var isSameRow = Math.abs(tm.cy - fm.cy) < 30;
+  var centerDx = Math.abs(tm.cx - fm.cx);
+  // Adjacent same-row modules should stay direct (no arc/lane).
+  var sameRowDirect = isSameRow && centerDx <= 240;
+  return {
+    fm: fm, tm: tm,
+    p1: edgePt(fm, tm.cx, tm.cy),
+    p2: edgePt(tm, fm.cx, fm.cy),
+    elbowY: null,
+    sameRowDirect: sameRowDirect
+  };
+});
+
+// Pass 2 — group cross-row connections by row-pair and assign staggered elbowY
+//          + group non-adjacent same-row connections by row and assign lanes
+//          (top-highway connections are excluded from this pass)
+var pairGroups = {};
+var sameRowGroups = {};
+connPts.forEach(function(cp, ci) {
+  if (!cp || cp.topRoute) return;              // skip top-highway
+  if (Math.abs(cp.p2.y - cp.p1.y) < 30) {
+    if (cp.sameRowDirect) return;
+    var sr = snapRow(cp.p1.y);
+    var sk = String(sr);
+    if (!sameRowGroups[sk]) sameRowGroups[sk] = [];
+    sameRowGroups[sk].push(ci);
+    return;
+  }
+  var r1 = snapRow(cp.p1.y), r2 = snapRow(cp.p2.y);
+  var key = Math.min(r1,r2) + '_' + Math.max(r1,r2);
+  if (!pairGroups[key]) pairGroups[key] = [];
+  pairGroups[key].push(ci);
+});
+
+Object.keys(pairGroups).forEach(function(key) {
+  var cfg = PAIR_CFG[key];
+  if (!cfg) return;
+  var idxs = pairGroups[key];
+  // Sort by horizontal centre so adjacent connections get adjacent lanes → fewest crossings
+  idxs.sort(function(a, b) {
+    var ca = (connPts[a].p1.x + connPts[a].p2.x) / 2;
+    var cb = (connPts[b].p1.x + connPts[b].p2.x) / 2;
+    return ca - cb;
+  });
+  var n = idxs.length;
+  idxs.forEach(function(ci, pos) {
+    connPts[ci].elbowY = cfg.baseY + (pos - (n - 1) / 2) * cfg.lane;
+  });
+});
+
+Object.keys(sameRowGroups).forEach(function(key) {
+  var cfg = SAME_ROW_CFG[key];
+  if (!cfg) return;
+  var idxs = sameRowGroups[key];
+  idxs.sort(function(a, b) {
+    var ca = (connPts[a].p1.x + connPts[a].p2.x) / 2;
+    var cb = (connPts[b].p1.x + connPts[b].p2.x) / 2;
+    return ca - cb;
+  });
+  var n = idxs.length;
+  idxs.forEach(function(ci, pos) {
+    connPts[ci].elbowY = cfg.baseY + (pos - (n - 1) / 2) * cfg.lane;
+  });
+});
+
+// Pass 3 — assign top-highway lanes + right-side ingress lanes to route:'top' connections.
+//          These lanes sit ABOVE row 1, then approach target modules from the RIGHT edge.
+var TOP_BASE = 76;
+var TOP_STEP = 9;
+var RHS_BASE = 1562;
+var RHS_STEP = 9;
+var topRouteIdxs = [];
+connPts.forEach(function(cp, ci) {
+  if (cp && cp.topRoute) topRouteIdxs.push(ci);
+});
+topRouteIdxs.sort(function(a, b) {
+  var da = Math.abs(connPts[a].tm.cy - connPts[a].fm.cy);
+  var db = Math.abs(connPts[b].tm.cy - connPts[b].fm.cy);
+  return db - da;
+});
+topRouteIdxs.forEach(function(ci, pos) {
+  connPts[ci].topY = TOP_BASE - pos * TOP_STEP;
+  connPts[ci].rhs = RHS_BASE + pos * RHS_STEP;
+});
+
+// ─── Build connections ────────────────────────────────────────────────────────
+var connEls = [];
+
+CONNS.forEach(function(conn, ci) {
+  var cp = connPts[ci];
+  if (!cp) return;
+  var fm = modMap[conn.from];
+  var col2 = CATS[fm.cat].color;
+  var isDash = conn.style === 'dashed' || !!fm.external;
+
+  var pathD, lp;
+  if (cp.topRoute) {
+    // Top highway + right ingress:
+    // source top edge → top lane → right-side lane → target row → target RIGHT edge.
+    var topY = cp.topY;
+    var rhs = cp.rhs;
+    var tm = cp.tm;
+    pathD = 'M'+fm.cx+','+(fm.cy-fm.h/2)+
+            ' L'+fm.cx+','+topY+
+            ' L'+rhs+','+topY+
+            ' L'+rhs+','+tm.cy+
+            ' L'+(tm.cx+tm.w/2)+','+tm.cy;
+    lp = { x: (fm.cx + rhs) / 2, y: topY - 9, anchor: 'middle' };
+  } else {
+    var p1 = cp.p1, p2 = cp.p2, ey = cp.elbowY;
+    pathD = makePath(p1, p2, ey);
+    lp = labelPos(p1, p2, ey);
+  }
+
+  var pathEl = svgEl('path', {
+    d: pathD,
+    fill:'none', stroke:col2, 'stroke-width':'1.7',
+    'stroke-opacity': fm.external ? '0.3' : (cp.topRoute ? '0.6' : '0.5'),
+    'marker-end':'url(#arr-'+fm.cat+')'
+  });
+  if (isDash) pathEl.setAttribute('stroke-dasharray','6 4');
+  connGrp.appendChild(pathEl);
+
+  var labelEl = null;
+  if (conn.label) {
+    labelEl = svgEl('text', {
+      x: lp.x, y: lp.y,
+      'text-anchor': lp.anchor || 'middle', 'dominant-baseline':'middle',
+      'font-family':"'Segoe UI',system-ui,sans-serif",
+      'font-size':'8', 'font-weight':'600',
+      fill:rgba(col2,0.55), 'pointer-events':'none', 'class':'conn-label'
+    });
+    labelEl.textContent = conn.label;
+    connGrp.appendChild(labelEl);
+  }
+  connEls.push({ path:pathEl, labelEl:labelEl, from:conn.from, to:conn.to,
+    catId:fm.cat, color:col2, isDash:isDash, isExternal:!!fm.external });
+});
+
+// ─── Build nodes ─────────────────────────────────────────────────────────────
+var nodeEls = {};
+
+MODS.forEach(function(mod) {
+  var cat = CATS[mod.cat], col3 = cat.color;
+  var hw = mod.w/2, hh = mod.h/2;
+  var grp = svgEl('g', { 'data-id':mod.id });
+  grp.setAttribute('transform','translate('+mod.cx+','+mod.cy+')');
+  grp.style.cursor = 'pointer';
+
+  if (mod.external) {
+    var er = svgEl('rect', {
+      x:-hw, y:-hh, width:mod.w, height:mod.h, rx:'10', ry:'10',
+      fill:rgba(col3,0.07), stroke:col3, 'stroke-width':'1',
+      'stroke-dasharray':'4 3', 'stroke-opacity':'0.4'
+    });
+    grp.appendChild(er);
+    var lines = mod.name.split('\n'), lh = 15;
+    var sy = lines.length > 1 ? -(lh*(lines.length-1))/2 : 0;
+    lines.forEach(function(ln, li) {
+      var lt = svgEl('text', {
+        x:'0', y: sy+li*lh,
+        'text-anchor':'middle', 'dominant-baseline':'middle',
+        'font-family':"'Segoe UI',system-ui,sans-serif",
+        'font-size': li===0 ? '10.5' : '9.5',
+        'font-weight': li===0 ? '700' : '500',
+        fill:rgba(col3,0.8), 'pointer-events':'none'
+      });
+      lt.textContent = ln;
+      grp.appendChild(lt);
+    });
+    nodeGrp.appendChild(grp);
+
+  } else {
+    if (mod.big) {
+      grp.appendChild(svgEl('rect', {
+        x:-(hw+8), y:-(hh+8), width:mod.w+16, height:mod.h+16,
+        rx:'20', ry:'20', fill:rgba(col3,0.10), stroke:'none'
+      }));
+    }
+    var bg = svgEl('rect', {
+      x:-hw, y:-hh, width:mod.w, height:mod.h,
+      rx: mod.big ? '13' : '10', ry: mod.big ? '13' : '10',
+      fill:rgba(col3,0.18), stroke:col3,
+      'stroke-width': mod.big ? '1.8' : '1.3',
+      'stroke-opacity': mod.big ? '0.75' : '0.5'
+    });
+    grp.appendChild(bg);
+    grp.appendChild(svgEl('rect', {
+      x:-hw+1, y:-hh+7, width:'3.5', height:mod.h-14,
+      rx:'1.75', ry:'1.75', fill:col3, 'fill-opacity':'0.9', 'pointer-events':'none'
+    }));
+    var lbl = svgEl('text', {
+      x:'5', y:'0.5', 'text-anchor':'middle', 'dominant-baseline':'middle',
+      'font-family':"'Segoe UI',system-ui,sans-serif",
+      'font-size': mod.big ? '12.5' : '11.5',
+      'font-weight': mod.big ? '700' : '600',
+      fill:'#ffffff', 'fill-opacity':'0.92', 'pointer-events':'none'
+    });
+    lbl.textContent = mod.name;
+    grp.appendChild(lbl);
+    nodeGrp.appendChild(grp);
+    nodeEls[mod.id] = { grp:grp, bg:bg, lbl:lbl };
+  }
+
+  (function(mid) {
+    grp.addEventListener('mouseenter', function(e) { onHover(mid, e); });
+    grp.addEventListener('mouseleave', offHover);
+    grp.addEventListener('mousemove', posTooltip);
+  })(mod.id);
+});
+
+// ─── Hover ────────────────────────────────────────────────────────────────────
+function onHover(id, e) {
+  var linked = {}; linked[id] = true;
+  var litConns = [];
+  connEls.forEach(function(c) {
+    if (c.from===id || c.to===id) {
+      linked[c.from]=true; linked[c.to]=true; litConns.push(c);
+    }
+  });
+  for (var nid in nodeEls) {
+    if (!Object.prototype.hasOwnProperty.call(nodeEls, nid)) continue;
+    var ne = nodeEls[nid];
+    var isMain = nid===id, isLinked = !!linked[nid];
+    ne.bg.setAttribute('fill-opacity', isMain ? '0.5' : isLinked ? '0.28' : '0.04');
+    ne.bg.setAttribute('stroke-opacity', isLinked ? '1' : '0.08');
+    ne.lbl.setAttribute('fill-opacity', isLinked ? '1' : '0.1');
+  }
+  connGrp.querySelectorAll('.conn-label').forEach(function(l) {
+    l.setAttribute('opacity','0.08');
+  });
+  connEls.forEach(function(c) {
+    var isLit = litConns.indexOf(c) !== -1;
+    if (isLit) {
+      c.path.setAttribute('stroke-opacity','1');
+      c.path.setAttribute('stroke-width','2.8');
+      c.path.setAttribute('stroke-dasharray','10 6');
+      c.path.style.animation = 'flow 0.85s linear infinite';
+      if (c.labelEl) c.labelEl.setAttribute('opacity','1');
+    } else {
+      c.path.setAttribute('stroke-opacity','0.04');
+      c.path.setAttribute('stroke-width','1');
+      c.path.style.animation = '';
+    }
+  });
+  var m = modMap[id], cat = CATS[m.cat];
+  ttBadge.textContent = cat.label;
+  ttBadge.style.color = cat.color;
+  ttName.textContent = m.name.replace('\n',' ');
+  ttDesc.textContent = m.desc;
+  tooltip.classList.add('show');
+  posTooltip(e);
+}
+
+function offHover() {
+  for (var nid in nodeEls) {
+    if (!Object.prototype.hasOwnProperty.call(nodeEls, nid)) continue;
+    var ne = nodeEls[nid], nm = modMap[nid];
+    ne.bg.setAttribute('fill-opacity','0.18');
+    ne.bg.setAttribute('stroke-opacity', nm.big ? '0.75' : '0.5');
+    ne.lbl.setAttribute('fill-opacity','0.92');
+  }
+  connEls.forEach(function(c) {
+    c.path.setAttribute('stroke-opacity', c.isExternal ? '0.3' : '0.5');
+    c.path.setAttribute('stroke-width','1.7');
+    if (c.isDash) c.path.setAttribute('stroke-dasharray','6 4');
+    else c.path.removeAttribute('stroke-dasharray');
+    c.path.style.animation = '';
+    if (c.labelEl) c.labelEl.removeAttribute('opacity');
+  });
+  connGrp.querySelectorAll('.conn-label').forEach(function(l) {
+    l.removeAttribute('opacity');
+  });
+  tooltip.classList.remove('show');
+}
+
+function posTooltip(e) {
+  var tw=280, th=130, vw=window.innerWidth, vh=window.innerHeight;
+  tooltip.style.left = (e.clientX+18+tw>vw ? e.clientX-tw-10 : e.clientX+18)+'px';
+  tooltip.style.top  = (e.clientY-14+th>vh ? e.clientY-th-10 : e.clientY-14)+'px';
+}
+
+// ─── Legend ───────────────────────────────────────────────────────────────────
+var legEl = document.getElementById('legend');
+for (var catKey in CATS) {
+  if (!Object.prototype.hasOwnProperty.call(CATS, catKey)) continue;
+  var lc = CATS[catKey];
+  var row = document.createElement('div'); row.className='leg-row';
+  var sw = document.createElement('div'); sw.className='swatch'; sw.style.background=lc.color;
+  row.appendChild(sw); row.appendChild(document.createTextNode(lc.label));
+  legEl.appendChild(row);
+}
+
+// ─── Zoom + pan ───────────────────────────────────────────────────────────────
+var scale=1, tx=0, ty=0, dragging=false, dragX=0, dragY=0;
+
+function applyTransform() {
+  canvasGrp.setAttribute('transform','translate('+tx+','+ty+') scale('+scale+')');
+}
+
+// Content bounds — x 42..1535, y 40..660
+var DX=42, DY=40, DW=1493, DH=640;
+
+function fitDiagram() {
+  var vw=window.innerWidth, vh=window.innerHeight;
+  if (vw<10||vh<10) return false;
+  scale = Math.min((vw-60)/DW, (vh-80)/DH) * 0.95;
+  tx = (vw-DW*scale)/2 - DX*scale;
+  ty = (vh-DH*scale)/2 - DY*scale;
+  applyTransform();
+  return true;
+}
+
+if (!fitDiagram()) {
+  function onInitResize() { if (fitDiagram()) window.removeEventListener('resize',onInitResize); }
+  window.addEventListener('resize', onInitResize);
+}
+
+mainSvg.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  var factor = e.deltaY>0 ? 0.88 : 1.12;
+  var ns = Math.min(Math.max(scale*factor, 0.2), 6);
+  tx = e.clientX-(e.clientX-tx)*(ns/scale);
+  ty = e.clientY-(e.clientY-ty)*(ns/scale);
+  scale = ns; applyTransform();
+}, { passive:false });
+
+mainSvg.addEventListener('mousedown', function(e) {
+  if (e.target.closest && e.target.closest('[data-id]')) return;
+  dragging=true; dragX=e.clientX; dragY=e.clientY;
+  mainSvg.style.cursor='grabbing';
+});
+window.addEventListener('mousemove', function(e) {
+  if (!dragging) return;
+  tx+=e.clientX-dragX; ty+=e.clientY-dragY;
+  dragX=e.clientX; dragY=e.clientY; applyTransform();
+});
+window.addEventListener('mouseup', function() { dragging=false; mainSvg.style.cursor='grab'; });
+
+})();
+</script>
+</body>
+</html>

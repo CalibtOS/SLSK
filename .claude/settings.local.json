@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "mcp__stitch__get_screen",
+      "Bash(apt-cache show:*)",
+      "Bash(apt-cache search:*)",
+      "Bash(python3 -m venv --help)"
+    ]
+  }
+}

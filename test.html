@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Generate DOCX</title>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f8;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+  .card{background:#fff;border-radius:14px;box-shadow:0 4px 32px rgba(0,0,0,.12);padding:48px 44px;max-width:480px;width:100%;text-align:center}
+  .icon{font-size:52px;margin-bottom:16px}
+  h1{font-size:20px;font-weight:700;color:#1C2B39;margin-bottom:6px}
+  .sub{font-size:13px;color:#666;margin-bottom:28px;line-height:1.6}
+  .meta{background:#f0f5ff;border:1px solid #cdd9f0;border-radius:8px;padding:14px 18px;font-size:12.5px;color:#1C2B39;text-align:left;margin-bottom:24px;line-height:2}
+  .meta b{color:#1C2B39}
+  button{background:#1C2B39;color:#fff;border:none;border-radius:8px;padding:14px 0;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px;transition:background .2s}
+  button:hover{background:#2a3f55}
+  button:disabled{background:#aaa;cursor:not-allowed}
+  .note{font-size:11px;color:#aaa;margin-top:14px;line-height:1.6}
+  .success{background:#e8f5ee;border:1px solid #a8d5b8;border-radius:8px;padding:12px 16px;font-size:13px;color:#2a7d4f;margin-top:12px;display:none}
+  .err{background:#fdf0ef;border:1px solid #e8a8a8;border-radius:8px;padding:12px 16px;font-size:13px;color:#c0392b;margin-top:12px;display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">📄</div>
+  <h1>Odoo ERP Business Proposal</h1>
+  <p class="sub">Full professional document — 13 sections, all tables,<br>verified data, 9 EU marketplaces.</p>
+  <div class="meta">
+    <b>For:</b> SLSK Ventures GmbH, Leverkusen<br>
+    <b>By:</b> CalibtOS GmbH, Köln<br>
+    <b>Date:</b> March 2026 &nbsp;|&nbsp; <b>Ref:</b> CTOS-SLSK-2026-001<br>
+    <b>Format:</b> Microsoft Word (.docx)
+  </div>
+  <button id="btn" onclick="generate()">⬇&nbsp; Download Proposal (.docx)</button>
+  <div class="success" id="ok">✅ <b>Downloaded.</b> Open with Microsoft Word or LibreOffice Writer.</div>
+  <div class="err" id="er"></div>
+  <p class="note">Native .docx format · Opens in Word, LibreOffice, Google Docs · All tables and headings preserved</p>
+</div>
+
+<script>
+async function generate(){
+  const btn=document.getElementById('btn');
+  const ok=document.getElementById('ok');
+  const er=document.getElementById('er');
+  btn.disabled=true; btn.textContent='Building document…';
+  ok.style.display='none'; er.style.display='none';
+  try{
+    const {
+      Document,Packer,Paragraph,Table,TableRow,TableCell,TextRun,
+      HeadingLevel,AlignmentType,BorderStyle,WidthType,ShadingType,
+      PageBreak,TabStopType,TabStopLeader,convertInchesToTwip,
+      TableLayoutType,VerticalAlign
+    } = docx;
+
+    // ── helpers ──────────────────────────────────────────
+    const NAVY   = '1C2B39';
+    const TEAL   = '017E84';
+    const TEALLT = 'E6F4F5';
+    const AMBER  = 'FDF3E7';
+    const AMBR2  = 'E67E22';
+    const GREY   = 'F5F5F5';
+    const WHITE  = 'FFFFFF';
+    const BLACK  = '1A1A1A';
+
+    const pt = n => n*20; // half-points → twips: 1pt = 20 twips
+
+    const noBorder = {style:BorderStyle.NONE,size:0,color:'FFFFFF'};
+    const thinBorder = {style:BorderStyle.SINGLE,size:4,color:'CCCCCC'};
+    const navyBorder = {style:BorderStyle.SINGLE,size:8,color:NAVY};
+
+    function h1(num,text){
+      return new Paragraph({
+        children:[
+          new TextRun({text:num+'  ',bold:true,size:pt(14),color:TEAL}),
+          new TextRun({text,bold:true,size:pt(14),color:NAVY}),
+        ],
+        spacing:{before:pt(18),after:pt(6)},
+        border:{bottom:{style:BorderStyle.SINGLE,size:10,color:NAVY}},
+      });
+    }
+    function h2(text){
+      return new Paragraph({
+        children:[new TextRun({text,bold:true,size:pt(12),color:NAVY})],
+        spacing:{before:pt(12),after:pt(4)},
+      });
+    }
+    function h3(text){
+      return new Paragraph({
+        children:[new TextRun({text,bold:true,size:pt(11),color:TEAL})],
+        spacing:{before:pt(8),after:pt(3)},
+      });
+    }
+    function body(text,opts={}){
+      return new Paragraph({
+        children:[new TextRun({text,size:pt(10),color:BLACK,...opts})],
+        spacing:{before:pt(2),after:pt(5)},
+      });
+    }
+    function bullet(text){
+      return new Paragraph({
+        children:[new TextRun({text,size:pt(10),color:BLACK})],
+        bullet:{level:0},
+        spacing:{before:pt(1),after:pt(3)},
+      });
+    }
+    function infoBox(text){
+      return new Paragraph({
+        children:[new TextRun({text,size:pt(9.5),italics:true,color:'004B50'})],
+        spacing:{before:pt(4),after:pt(4)},
+        indent:{left:pt(12),right:pt(12)},
+        border:{
+          top:{style:BorderStyle.SINGLE,size:8,color:TEAL},
+          bottom:{style:BorderStyle.SINGLE,size:8,color:TEAL},
+          left:{style:BorderStyle.SINGLE,size:18,color:TEAL},
+          right:{style:BorderStyle.SINGLE,size:8,color:TEAL},
+        },
+        shading:{type:ShadingType.CLEAR,fill:TEALLT},
+      });
+    }
+    function warnBox(text){
+      return new Paragraph({
+        children:[new TextRun({text,size:pt(9.5),italics:true,color:'5D2E00'})],
+        spacing:{before:pt(4),after:pt(4)},
+        indent:{left:pt(12),right:pt(12)},
+        border:{
+          top:{style:BorderStyle.SINGLE,size:8,color:AMBR2},
+          bottom:{style:BorderStyle.SINGLE,size:8,color:AMBR2},
+          left:{style:BorderStyle.SINGLE,size:18,color:AMBR2},
+          right:{style:BorderStyle.SINGLE,size:8,color:AMBR2},
+        },
+        shading:{type:ShadingType.CLEAR,fill:AMBER},
+      });
+    }
+    function spacer(){return new Paragraph({children:[new TextRun({text:'',size:pt(6)})],spacing:{before:0,after:pt(4)}});}
+    function pageBreak(){return new Paragraph({children:[new PageBreak()]});}
+
+    function makeTable(headers,rows,colWidths){
+      const pct = WidthType.DXA;
+      const total = 9000;
+      const w = colWidths || headers.map(()=>Math.floor(total/headers.length));
+      return new Table({
+        width:{size:total,type:pct},
+        layout:TableLayoutType.FIXED,
+        borders:{top:thinBorder,bottom:thinBorder,left:thinBorder,right:thinBorder,insideH:thinBorder,insideV:thinBorder},
+        rows:[
+          new TableRow({
+            tableHeader:true,
+            children:headers.map((h,i)=>new TableCell({
+              width:{size:w[i],type:pct},
+              shading:{type:ShadingType.CLEAR,fill:NAVY},
+              borders:{top:noBorder,bottom:noBorder,left:noBorder,right:noBorder},
+              verticalAlign:VerticalAlign.CENTER,
+              children:[new Paragraph({
+                children:[new TextRun({text:h,bold:true,size:pt(9),color:WHITE})],
+                spacing:{before:pt(2),after:pt(2)},
+              })],
+            })),
+          }),
+          ...rows.map((row,ri)=>new TableRow({
+            children:row.map((cell,i)=>new TableCell({
+              width:{size:w[i],type:pct},
+              shading:{type:ShadingType.CLEAR,fill:ri%2===0?WHITE:GREY},
+              borders:{top:thinBorder,bottom:thinBorder,left:thinBorder,right:thinBorder},
+              verticalAlign:VerticalAlign.TOP,
+              children:[new Paragraph({
+                children:[new TextRun({text:String(cell),size:pt(9),color:BLACK})],
+                spacing:{before:pt(2),after:pt(2)},
+              })],
+            })),
+          })),
+        ],
+      });
+    }
+
+    // ── CONTENT ─────────────────────────────────────────
+    const sections = [];
+    const children = [];
+
+    // COVER
+    children.push(
+      new Paragraph({
+        children:[new TextRun({text:'',size:pt(48)})],
+        spacing:{before:pt(60),after:0},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'CalibtOS GmbH',bold:true,size:pt(28),color:NAVY})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:0,after:pt(4)},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'Köln, Germany  ·  Odoo ERP Integration Partner',size:pt(12),color:TEAL})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:0,after:pt(24)},
+        border:{bottom:{style:BorderStyle.SINGLE,size:8,color:'CCCCCC'}},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'Business Analysis &',bold:true,size:pt(26),color:NAVY})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:pt(20),after:pt(4)},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'Odoo ERP Implementation Proposal',bold:true,size:pt(26),color:NAVY})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:0,after:pt(8)},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'SLSK Ventures GmbH  ·  Leverkusen, Germany',size:pt(13),color:TEAL})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:0,after:pt(24)},
+        border:{bottom:{style:BorderStyle.SINGLE,size:8,color:'CCCCCC'}},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'Prepared for: SLSK Ventures GmbH',size:pt(10),color:BLACK})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:pt(12),after:pt(3)},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'Prepared by: CalibtOS GmbH, Köln',size:pt(10),color:BLACK})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:0,after:pt(3)},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'Date: March 2026  ·  Ref: CTOS-SLSK-2026-001  ·  Version 1.0 — Verified',size:pt(10),color:BLACK})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:0,after:pt(3)},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'Scope: Full Business & Operations Analysis + Odoo ERP Implementation Roadmap',size:pt(10),color:BLACK})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:0,after:pt(60)},
+      }),
+      pageBreak(),
+    );
+
+    // TABLE OF CONTENTS
+    children.push(h1('','Table of Contents'), spacer());
+    const toc=[
+      ['1.','Executive Summary'],
+      ['2.','Company Profile & Verified Data'],
+      ['3.','Amazon Marketplace Footprint'],
+      ['4.','Operations & Supply Chain Analysis'],
+      ['5.','Critical Bottleneck Assessment'],
+      ['6.','SWOT Analysis'],
+      ['7.','Odoo ERP — Fit Assessment & Module Plan'],
+      ['8.','Implementation Roadmap'],
+      ['9.','Investment & ROI Framework'],
+      ['10.','Risk Register'],
+      ['11.','Strategic Recommendations'],
+      ['12.','Conclusion & Next Steps'],
+      ['13.','Data Sources & Verification Notes'],
+    ];
+    toc.forEach(([n,t])=>children.push(new Paragraph({
+      children:[
+        new TextRun({text:n+'  ',bold:true,size:pt(10),color:TEAL}),
+        new TextRun({text:t,size:pt(10),color:BLACK}),
+      ],
+      spacing:{before:pt(2),after:pt(2)},
+      indent:{left:pt(8)},
+    })));
+    children.push(pageBreak());
+
+    // ── 1. EXECUTIVE SUMMARY ──────────────────────────
+    children.push(
+      h1('1.','Executive Summary'), spacer(),
+      body('SLSK Ventures GmbH is a multi-brand Amazon FBA operator headquartered in Leverkusen, Germany. Active on Amazon since August 2018 and incorporated as a GmbH in November 2020, the company sells across nine confirmed Amazon marketplace storefronts: Amazon.de, Amazon.fr, Amazon.co.uk, Amazon.it, Amazon.es, Amazon.nl, Amazon.com.be, Amazon.se, and Amazon.ie.'),
+      body('The company\'s brand portfolio spans three product verticals: organic health foods and gardening (ZenGreens), respiratory safety equipment (VEVOX), and party entertainment (Wer Lacht Muss Trinken / SLSK Games). All three brands carry registered German trademarks filed with the DPMA.'),
+      body('As of March 2026, SLSK holds Top 1,000 status on Amazon.de (#516) with a 4.7-star seller rating and 1,883 verified reviews. The ZenGreens brand holds the #1 ranking in the Garden / Vegetable Seeds category on Amazon.nl and carries confirmed EU organic certification (inspection body code LU-BIO-04) sourcing seeds from Italy.'),
+      body('Despite this commercial success, the business currently operates without a central ERP system. Inventory, procurement, quality assurance, 3PL coordination, and financial reconciliation are managed manually across nine marketplaces and multiple currencies (EUR, GBP, SEK). This is a structural ceiling on further growth.'),
+      body('This proposal presents CalibtOS GmbH\'s findings from a full operational analysis of SLSK Ventures GmbH, identifies five critical bottlenecks, and sets out a phased Odoo Enterprise implementation plan across six phases over nine to twelve months.'),
+      spacer(),
+      h2('Key Performance Metrics — Independently Verified'), spacer(),
+      makeTable(
+        ['Metric','Value','Source'],
+        [
+          ['Amazon active since','August 2018','SellerRatings.com'],
+          ['Amazon.de seller rank','#516 — Top 1,000 (March 2026)','SellerRatings.com'],
+          ['Confirmed EU marketplaces','9 storefronts confirmed','Live Amazon product pages'],
+          ['Seller rating (DE)','4.7 / 5.0','SellerRatings.com'],
+          ['Review count (DE)','1,883 verified reviews','SellerRatings.com'],
+          ['Registered share capital','€26,000','Amtsgericht Köln HRB 103562'],
+          ['Balance sheet total (2023)','~€600,000 (+30.2% YoY)','Implisense.com'],
+          ['Registered trademarks','3 (ZenGreens, VEVOX, SLSK Games)','DPMA'],
+        ],
+        [3200,3500,2300]
+      ),
+      pageBreak(),
+    );
+
+    // ── 2. COMPANY PROFILE ────────────────────────────
+    children.push(
+      h1('2.','Company Profile & Verified Data'), spacer(),
+      h2('2.1  Legal & Corporate Identity'), spacer(),
+      makeTable(
+        ['Field','Details','Source'],
+        [
+          ['Legal name','SLSK Ventures GmbH','Amtsgericht Köln'],
+          ['Legal form','GmbH (Gesellschaft mit beschränkter Haftung)','Handelsregister'],
+          ['Registered address','Kieselstraße 6, 51371 Leverkusen, NRW, Germany','NorthData.com'],
+          ['Commercial register','Amtsgericht Köln, HRB 103562','NorthData.com'],
+          ['EUID','DER3306.HRB103562','NorthData.com'],
+          ['French register','SIREN 914935374 / SIRET 91493537400019 (April 2022)','NorthData.com'],
+          ['Incorporated','4 November 2020','NorthData.com'],
+          ['Amazon Seller ID','A2ZW5FKPIS8G6R','Amazon / SellerRatings.com'],
+          ['Amazon active since','August 2018 (pre-dates GmbH incorporation)','SellerRatings.com'],
+          ['Share capital','€26,000 (December 2020)','NorthData.com'],
+          ['Corporate purpose','E-commerce & wholesale; protective masks, textiles, health/beauty articles','NorthData.com'],
+          ['Former seller name','VEVOX Store','SellerRatings.com'],
+          ['Managing director','Anno C. B. Skriver (Founder & CEO)','NorthData.com'],
+          ['Balance sheet total (2023)','~€600,000 (+30.2% year-on-year)','Implisense.com'],
+        ],
+        [2800,4200,2000]
+      ),
+      spacer(),
+      warnBox('Note on team size and additional directors: Multiple commercial databases cite 4–6 employees and additional managing directors. NorthData records list Anno Skriver as confirmed managing director, with a truncated "N.N.Dewolf" entry also recorded (likely Jannik Schindewolf). Exact headcount and full shareholder list require access to the Bundesanzeiger annual filing. These figures must be confirmed directly with SLSK management.'),
+      spacer(),
+      h2('2.2  Brand Portfolio'), spacer(),
+      body('All three brands carry registered German trademarks filed with the DPMA and are commercially active across multiple Amazon marketplaces.'),
+      spacer(),
+      makeTable(
+        ['Brand','Category','Trademark Filed','Key Products (Confirmed Live on Amazon)'],
+        [
+          ['ZenGreens','Organic Health / Gardening','July 2021','Sprout seeds (broccoli, alfalfa, radish, flax, mung bean, cress, beetroot), growing kits (glass jar + stainless tray), 10/20/25-piece seed sets, microgreens towers, vegetable & chilli seed sets'],
+          ['VEVOX','Safety & PPE','February 2022','FFP2/FFP3 respiratory masks, A1/P2 gas filters, P2 particle filters, half-masks, safety goggles, protective gloves'],
+          ['Wer Lacht Muss Trinken / SLSK Games','Party Games','September 2021','"Wahrheit oder Trinken", "Fortune", "Wer von Euch" card games, drinking game sets'],
+        ],
+        [1800,1800,1600,3800]
+      ),
+      spacer(),
+      infoBox('Supply chain confirmation: Amazon product listings for ZenGreens explicitly state Italy as country of origin across multiple SKUs. The EU organic inspection body code LU-BIO-04 is confirmed on certified product listings. This is verified data, not an inference — directly material to the supply chain analysis in Section 4.'),
+      pageBreak(),
+    );
+
+    // ── 3. MARKETPLACE FOOTPRINT ──────────────────────
+    children.push(
+      h1('3.','Amazon Marketplace Footprint'), spacer(),
+      body('Prior analyses cited "4+ EU marketplaces." Independent verification of live Amazon product pages as of March 2026 confirms nine active European marketplace storefronts. Amazon.ie was launched by Amazon in 2025 and SLSK products are confirmed present, sold via the DE seller entity. No active seller entity was found on Amazon.pl (Poland) or Amazon.com.tr (Turkey) at the time of this analysis.'),
+      spacer(),
+      makeTable(
+        ['Marketplace','Seller Entity','Active Since','Rank / Status','Verification'],
+        [
+          ['Amazon.de','SLSK Ventures GmbH (DE)','August 2018','#516 — Top 1,000','✓ SellerRatings.com (Mar 2026)'],
+          ['Amazon.fr','SLSK Ventures GmbH (FR)','2022','#7,219','✓ SellerRatings.com (Mar 2026)'],
+          ['Amazon.co.uk','SLSK Ventures GmbH (UK)','Confirmed active','FBA-fulfilled','✓ Live product page'],
+          ['Amazon.it','SLSK Ventures GmbH (IT)','Confirmed active','FBA-fulfilled','✓ Live product page'],
+          ['Amazon.es','SLSK Ventures GmbH (ES)','Confirmed active','FBA-fulfilled','✓ Live product page'],
+          ['Amazon.nl','SLSK Ventures GmbH (NL)','Confirmed active','#1 in Garden/Veg Seeds','✓ Live product page'],
+          ['Amazon.com.be','SLSK Ventures GmbH (BE)','Confirmed active','FBA-fulfilled','✓ Live product page'],
+          ['Amazon.se','SLSK Ventures GmbH (SE)','Confirmed active','FBA-fulfilled (SEK)','✓ Live product page'],
+          ['Amazon.ie','Via DE seller entity','Confirmed active (2025)','FBA-fulfilled','✓ Live product page'],
+          ['Amazon.pl','—','—','No SLSK entity found','✗ Not confirmed'],
+          ['Amazon.com.tr','—','—','No SLSK entity found','✗ Not confirmed'],
+        ],
+        [1500,2200,1500,1700,2100]
+      ),
+      spacer(),
+      infoBox('This nine-marketplace footprint — with multiple currencies (EUR, GBP, SEK), separate VAT registrations, and distributed FBA fulfilment centres — significantly expands the operational complexity beyond what was previously documented and directly defines the scope of the Odoo implementation required.'),
+      pageBreak(),
+    );
+
+    // ── 4. SUPPLY CHAIN ───────────────────────────────
+    children.push(
+      h1('4.','Operations & Supply Chain Analysis'), spacer(),
+      h2('4.1  Business Model'), spacer(),
+      body('SLSK operates a classic Amazon FBA private-label model. Products are sourced or assembled through third parties, shipped into Amazon\'s EU fulfilment centres, and distributed via PAN-EU or EFN programmes. The company maintains separate seller registrations per marketplace, consistent with full PAN-EU FBA participation requiring VAT registration in each country. SLSK\'s internal operations focus on brand development, procurement, and supply chain management.'),
+      spacer(),
+      h2('4.2  ZenGreens Seed Supply Chain'), spacer(),
+      makeTable(
+        ['Stage','Party','Location','Current Pain Points'],
+        [
+          ['1. Raw seeds procurement','Organic seed supplier(s)','Italy (confirmed: Amazon listings state "Country of origin: Italy"; EU organic code LU-BIO-04 on packaging)','No procurement tracking; no demand-driven reorder points; lead times not formally recorded'],
+          ['2. Packaging procurement','Packaging supplier','Imported — Asia (inferred from lead time structure)','Unpredictable lead times; packaging and seeds arrive on different schedules, creating assembly bottlenecks'],
+          ['3. Assembly / packing','3PL assembler','Germany (not publicly disclosed)','No SLA; no fill-weight standards; quality by sense-check only; no batch records; no throughput metrics'],
+          ['4. Pre-FBA warehousing','3PL warehouse','Germany / EU','No real-time inventory visibility; no digital integration with sales systems'],
+          ['5. FBA inbound shipments','Amazon FBA','9 EU fulfilment networks','Manual shipment creation; no automated replenishment triggers'],
+          ['6. Customer fulfilment','Amazon FBA','Pan-EU (9 marketplaces)','VAT compliance across 9 jurisdictions including GBP (UK) and SEK (Sweden)'],
+        ],
+        [1800,1700,2100,3400]
+      ),
+      spacer(),
+      h2('4.3  The Seeds Unit-of-Measure Problem'), spacer(),
+      body('Seeds introduce a structurally complex inventory challenge not found in SLSK\'s other product lines:'),
+      bullet('Level 1 — Procurement vs. sales unit mismatch: Seeds are purchased by weight (kg) from Italian suppliers but sold as discrete consumer units. Without a formal conversion mechanism, stock-on-hand figures are permanently in the wrong unit of measure.'),
+      bullet('Level 2 — Multi-variant SKU complexity: ZenGreens seeds are sold in three size variants per species (10g, 200g, 500g — all confirmed live). Each variant has a different kg-to-unit conversion ratio and each ratio must account for packing loss.'),
+      body('Consequences: overfill and underfill at 3PL are undetected; true COGS per unit is unknown; losses are absorbed invisibly; and EU organic traceability requirements under Regulation 2018/848 cannot be met without lot/batch records.'),
+      pageBreak(),
+    );
+
+    // ── 5. BOTTLENECKS ────────────────────────────────
+    children.push(h1('5.','Critical Bottleneck Assessment'), spacer());
+    const bns=[
+      ['Bottleneck 1  —  No ERP: Fully Manual Operations','CRITICAL  |  Urgency: Immediate','Every operational process — purchasing, inventory, 3PL coordination, FBA replenishment, and accounting — is managed manually across nine Amazon marketplaces. There is no single source of truth for inventory, outstanding orders, or financial position. Each additional SKU or market without ERP compounds risk exponentially.'],
+      ['Bottleneck 2  —  Quality Control by Intuition, Not Metrics','HIGH  |  Urgency: High','ZenGreens seed products carry EU organic certification. EU Regulation 2018/848 requires documented lot/batch traceability throughout the supply chain. There are no inspection checklists, no sampling protocols, no defect rate thresholds, and no production batch records. This creates regulatory and reputational risk across all nine markets.'],
+      ['Bottleneck 3  —  Fragmented Seed Supply Chain (Dual-Source)','HIGH  |  Urgency: High','Italian organic seeds and imported packaging must converge at the German 3PL assembler before any sellable unit exists. These two streams have entirely different lead times, suppliers, and logistics routes with no digital coordination mechanism. A delay in either stream halts production entirely.'],
+      ['Bottleneck 4  —  No 3PL Integration or SLA Framework','MEDIUM-HIGH  |  Urgency: High','3PL partners operate without formal SLAs, digital integration, or accountability metrics. Stock at 3PL warehouses is not visible in real time. Throughput rates, error rates, and turnaround times can only be established by manually contacting the 3PL. This does not scale across nine markets.'],
+      ['Bottleneck 5  —  Loss Calculation Is Impossible','MEDIUM-HIGH  |  Urgency: Medium','Without weight-to-unit conversion tracking, 3PL receiving records, or batch data, losses at any supply chain stage cannot be quantified. True gross margin on seed products is unknown. Losses are silently absorbed and margin improvement cannot be targeted.'],
+    ];
+    bns.forEach(([title,impact,desc])=>{
+      children.push(
+        h3(title),
+        new Paragraph({
+          children:[new TextRun({text:'Impact: '+impact,size:pt(9.5),italics:true,color:AMBR2,bold:true})],
+          spacing:{before:pt(1),after:pt(3)},
+        }),
+        body(desc),
+        spacer(),
+      );
+    });
+    children.push(pageBreak());
+
+    // ── 6. SWOT ───────────────────────────────────────
+    children.push(h1('6.','SWOT Analysis'), spacer());
+    const swotData=[
+      ['STRENGTHS','WEAKNESSES'],
+      [
+        'Active on Amazon since August 2018 (7.5+ years)\n#516 on Amazon.de — Top 1,000 (March 2026)\n4.7-star rating, 1,883+ verified reviews\n9 active EU marketplace storefronts confirmed\n3 DPMA-registered trademark brands\nEU organic certification (LU-BIO-04) confirmed\n#1 in Garden/Veg Seeds on Amazon.nl\nFrench legal entity registered (SIREN 914935374)\nBalance sheet growing: +30.2% YoY (2023)',
+        'No ERP — fully manual across 9 marketplaces\nQuality control undocumented, subjective\nSplit supply chain: Italian seeds + imported packaging\nNo 3PL SLA or accountability framework\nLoss / yield calculation impossible\nDual UoM (kg vs. units) causes inventory errors\n9-marketplace VAT/OSS compliance managed ad hoc\nSmall team relative to operational scale',
+      ],
+    ];
+    const swotData2=[
+      ['OPPORTUNITIES','THREATS'],
+      [
+        'Odoo to unify all 9 marketplaces in one system\nAutomated FBA replenishment prevents rank drops\nSeed yield tracking: 5–15% margin recovery\nFormal QA to protect organic certification & ratings\nLot/batch tracking for EU Reg 2018/848 compliance\nAccurate COGS enables real pricing strategy\nStructural organic food growth trend across EU\nOdoo B2C webshop as DTC hedge against Amazon',
+        'Amazon algorithm dependency: rank drop cascades across all 9 accounts simultaneously\nPackaging import delays can halt all production\nRising FBA fulfilment fees across EU\nTightening organic regulation under EU 2018/848\n3PL mishandling with no contractual accountability\nGBP/EUR and SEK/EUR currency risk\nIncreasing competition in organic microgreens niche',
+      ],
+    ];
+    [swotData, swotData2].forEach(sw=>{
+      children.push(makeTable(
+        sw[0],
+        [sw[1]],
+        [4500,4500]
+      ), spacer());
+    });
+    children.push(pageBreak());
+
+    // ── 7. ODOO FIT ───────────────────────────────────
+    children.push(
+      h1('7.','Odoo ERP — Fit Assessment & Module Plan'), spacer(),
+      h2('7.1  Why Odoo for SLSK'), spacer(),
+      body('Odoo is a modular, open-source ERP suite purpose-built for the complexity SLSK faces. It provides a native Amazon Connector supporting multiple seller accounts, a robust inventory engine with multi-warehouse and multi-UoM support, Bills of Materials for seed assembly tracking, a Quality Control module with configurable inspection points, and a fully connected accounting module with EU VAT and OSS compliance frameworks. For a business operating across nine Amazon marketplaces with a complex assembly-based seed supply chain and no existing ERP baseline, Odoo provides the most direct, cost-effective path to full operational integration at a scale appropriate to SLSK\'s current size.'),
+      spacer(),
+      h2('7.2  Module-to-Bottleneck Mapping'), spacer(),
+      makeTable(
+        ['Odoo Module','Capability','Bottleneck'],
+        [
+          ['Amazon Connector','Sync orders, inventory, and settlements across all 9 marketplace accounts in real time','BN1, BN5'],
+          ['Inventory — Multi-location','Virtual warehouse per 3PL and per Amazon FC (DE, FR, UK, IT, ES, NL, BE, SE, IE)','BN1, BN4'],
+          ['Inventory — Units of Measure','Weight-to-unit conversion for seed SKUs with fill-weight and loss variance','BN3, BN5'],
+          ['Purchase','POs to Italian seed suppliers and packaging suppliers; supplier lead time tracking','BN3'],
+          ['Manufacturing — Bills of Materials','BOM per seed SKU (kg → sellable units); production orders track each 3PL packing run','BN2, BN5'],
+          ['Manufacturing — Lot/Batch Tracking','End-to-end traceability for organic certification (EU Reg 2018/848)','BN2'],
+          ['Quality (QCP)','Configurable Quality Control Points at seed receipt, post-assembly, and FBA inbound','BN2'],
+          ['Replenishment','Automated reorder points triggered by FBA stock levels and sales velocity data','BN1, BN3'],
+          ['Accounting','Amazon settlement reconciliation; COGS per SKU; EUR/GBP/SEK multi-currency; EU VAT/OSS','BN1'],
+          ['3PL Integration','API/EDI or manual receipt workflow; virtual 3PL locations for real-time stock visibility','BN4'],
+        ],
+        [2600,4900,1500]
+      ),
+      spacer(),
+      h2('7.3  Seeds Unit of Measure Architecture'), spacer(),
+      makeTable(
+        ['Supply Chain Stage','Unit of Measure','Odoo Location'],
+        [
+          ['Seed purchase from Italian supplier','kg (weight)','Purchase Order lines'],
+          ['Bulk seeds received at 3PL Germany','kg (weight)','3PL Virtual Warehouse'],
+          ['Bill of Materials (per variant)','kg per finished unit','Manufacturing module / BOM'],
+          ['10g packet (1 unit ≈ 0.0105 kg + 5% loss buffer)','Units (pcs)','Finished Goods location'],
+          ['200g packet (1 unit ≈ 0.210 kg + 5% loss buffer)','Units (pcs)','Finished Goods location'],
+          ['500g packet (1 unit ≈ 0.525 kg + 5% loss buffer)','Units (pcs)','Finished Goods location'],
+          ['Amazon FBA inbound (all 9 marketplaces)','Units (pcs)','Amazon Virtual Location per marketplace'],
+          ['Customer sale','Units (pcs)','FBA Sales Orders'],
+        ],
+        [3800,2200,3000]
+      ),
+      spacer(),
+      infoBox('Loss buffer percentages (5%) are illustrative starting points. Actual BOM values must be validated across a minimum of three pilot packing runs with manual weight recording before being finalised in Odoo. This validation is a mandatory gate in Phase 3 of the roadmap.'),
+      spacer(),
+      h2('7.4  Quality Control Checkpoints for ZenGreens Seeds'), spacer(),
+      makeTable(
+        ['Inspection Point','Trigger','Check Type','Required Outcome'],
+        [
+          ['Seed delivery receipt at 3PL','3PL receives bulk seeds from Italian supplier','Germination sample test; gross weight check; EU organic certificate (LU-BIO-04); lot number recorded','Accept / Reject / Quarantine — batch record created in Odoo'],
+          ['Packaging delivery receipt','3PL receives imported packaging','Dimensions; print quality; barcode/FNSKU scan; label accuracy','Accept / Reject'],
+          ['Post-assembly QC (per packing run)','After each packing run at 3PL','Fill-weight sample (min/max); seal integrity; label check; unit count vs. BOM','Pass / Fail — feeds yield loss calculation'],
+          ['FBA inbound preparation','Before dispatch to any of the 9 Amazon FCs','Unit count; FNSKU label scan; condition check','Ship / Hold'],
+        ],
+        [2000,2200,2800,2000]
+      ),
+      pageBreak(),
+    );
+
+    // ── 8. ROADMAP ────────────────────────────────────
+    children.push(
+      h1('8.','Implementation Roadmap'), spacer(),
+      body('CalibtOS recommends a phased implementation over nine to twelve months, designed to deliver measurable operational value at each stage while protecting SLSK\'s live Amazon revenue and rankings throughout the transition.'),
+      spacer(),
+      makeTable(
+        ['Phase','Timeline','Focus','Key Deliverables'],
+        [
+          ['1 — Foundation','Month 1–2','Odoo deployment, master data, Amazon Connector','Odoo 18 Enterprise live; all 9 marketplace accounts connected via SP-API; product catalogue imported; FBA stock synced; Chart of Accounts configured'],
+          ['2 — Inventory & 3PL','Month 2–4','Warehouse management, 3PL locations, purchase flows','3PL warehouses as Odoo virtual locations; POs issued through Odoo; goods receipt workflow live; 3PL SLA formalised'],
+          ['3 — Seeds Manufacturing','Month 4–6','BOM creation, UoM config, production orders','BOMs for all seed SKUs; 3 pilot packing runs validated; Manufacturing Orders track each 3PL run; loss/yield reports live'],
+          ['4 — Quality Control','Month 5–7','QCP setup, inspection workflows, batch tracking','All 4 QCPs live; checklists digitalised; lot/batch tracking active; organic certificates on supplier records'],
+          ['5 — Accounting & Compliance','Month 7–9','Settlement reconciliation, COGS, VAT/OSS','Amazon settlement reports auto-imported for all 9 accounts; COGS per SKU; EU VAT/OSS configured; GBP/SEK multi-currency live'],
+          ['6 — Optimisation','Month 9–12','Replenishment, forecasting, automation','Automated reorder points; demand forecasting; FBA low-stock alerts; EDI 3PL integration assessment'],
+        ],
+        [1500,1200,2200,4100]
+      ),
+      spacer(),
+      h2('Phase 1 — Key Technical Steps'), spacer(),
+      bullet('Deploy Odoo 18 Enterprise (Online recommended; Odoo.sh if custom module development is planned)'),
+      bullet('Install modules: Inventory, Purchase, Sales, Accounting, Amazon Connector, Quality, Manufacturing, Units of Measure'),
+      bullet('Configure multi-currency (EUR, GBP, SEK), EU VAT, and OSS compliance framework from Day 1'),
+      bullet('Connect Amazon SP-API credentials for all nine seller accounts (DE, FR, UK, IT, ES, NL, BE, SE, IE)'),
+      bullet('Import full product catalogue (ASINs and SKUs) from Seller Central into Odoo product records'),
+      bullet('Set up virtual warehouse locations: 3PL Germany and Amazon FCs for all 9 marketplaces'),
+      bullet('Run four-week parallel operation before any live cutover — Amazon ranking protection is the priority'),
+      bullet('Conduct full physical stock count across all 3PL and FBA locations to establish master data baseline'),
+      spacer(),
+      h2('Phase 1 — Immediate Quick Wins (Before Go-Live)'), spacer(),
+      bullet('Formalise a written 3PL SLA covering inventory reporting frequency, packing error rate thresholds, turnaround time, and escalation procedures'),
+      bullet('Introduce a structured batch record sheet at the 3PL for each packing run (quantity in, quantity out, waste recorded)'),
+      bullet('Define target fill weights and acceptable variances for every seed SKU variant (10g, 200g, 500g per species)'),
+      bullet('Conduct a full physical stock count across all locations to establish the Odoo migration baseline'),
+      pageBreak(),
+    );
+
+    // ── 9. INVESTMENT ─────────────────────────────────
+    children.push(
+      h1('9.','Investment & ROI Framework'), spacer(),
+      h2('9.1  Odoo Licensing — 2025/2026 Pricing (Verified at odoo.com)'), spacer(),
+      body('Odoo Enterprise uses a flat per-user model from version 17/18 onwards. All applications are included under a single user licence — there are no per-module fees.'),
+      spacer(),
+      makeTable(
+        ['Edition','Cost (EUR)','Recommendation for SLSK'],
+        [
+          ['Odoo Enterprise — Standard','€19.90 / user / month (billed annually) — all apps included','✓  Recommended baseline'],
+          ['Odoo Enterprise — Custom','€29.90 / user / month — adds Studio, External API, on-premise option','✓  Recommended if 3PL API integration planned'],
+          ['Odoo Community','Free (self-hosted)','✗  Not recommended — lacks Amazon Connector and advanced accounting'],
+        ],
+        [2500,3500,3000]
+      ),
+      spacer(),
+      infoBox('For a team of 5 users on the Standard plan, annual licensing is approximately €1,194/year — significantly lower than SAP, NetSuite, or Microsoft Dynamics 365 at equivalent operational scope.'),
+      spacer(),
+      h2('9.2  Total Cost of Ownership Estimate — Year 1'), spacer(),
+      makeTable(
+        ['Cost Element','Estimated Range','Notes'],
+        [
+          ['Odoo Enterprise licence (5 users, Standard, 12 months)','€1,194','€19.90 × 5 × 12'],
+          ['Phase 1–3: Foundation, inventory, manufacturing','€8,000 – €15,000','CalibtOS implementation hours, configuration, data migration'],
+          ['Phase 4–5: Quality control, accounting, VAT compliance','€4,000 – €8,000','QCP setup, settlement reconciliation, EU VAT specialist'],
+          ['Phase 6: Optimisation and automation','€2,000 – €4,000','Forecasting, automation, 3PL API integration if applicable'],
+          ['Staff training (2–3 days per core user)','€1,500 – €3,000','Structured CalibtOS onboarding programme'],
+          ['Estimated Total — Year 1','€17,000 – €32,200','Licence + implementation + training (all-in)'],
+          ['Ongoing (Year 2+): Licence + support retainer','€2,500 – €5,000 / year',''],
+        ],
+        [3800,2500,2700]
+      ),
+      spacer(),
+      h2('9.3  Expected ROI Drivers'), spacer(),
+      makeTable(
+        ['ROI Driver','Estimated Impact','Mechanism'],
+        [
+          ['Manual processing eliminated across 9 marketplaces','3–5 hrs/day recovered','Amazon Connector auto-syncs all orders, stock moves, and settlement data'],
+          ['Seed yield loss recovery','5–15% gross margin improvement','BOM-based tracking makes invisible losses visible and controllable'],
+          ['Stockout prevention across 9 markets','Ranking and revenue protection','Automated reorder triggers prevent stock events that damage all 9 rankings simultaneously'],
+          ['Quality cost avoidance','Reduced return rate','Formal QA checkpoints protect ratings and review scores across all marketplaces'],
+          ['Organic certification compliance','Regulatory risk elimination','Lot/batch tracking satisfies EU Regulation 2018/848 traceability requirements'],
+          ['True COGS and profitability visibility','Pricing strategy unlocked','First-ever per-SKU profitability reporting across all 9 marketplaces simultaneously'],
+        ],
+        [2800,2200,4000]
+      ),
+      pageBreak(),
+    );
+
+    // ── 10. RISK REGISTER ─────────────────────────────
+    children.push(
+      h1('10.','Risk Register'), spacer(),
+      makeTable(
+        ['Risk','Likelihood','Impact','Mitigation'],
+        [
+          ['Amazon ranking drop during ERP transition','Medium','High','Maintain manual FBA restocking in parallel during Phase 1–2; do not cut over any account until sync is fully validated across all 9 marketplaces'],
+          ['Packaging import delay blocking production','High','High','Establish 3–4 week safety stock of packaging; configure Odoo reorder points with extended import lead time buffers from Day 1'],
+          ['3PL resistance to reporting / integration requirements','Medium','High','Include reporting obligations in revised 3PL SLA before Odoo go-live; provide structured spreadsheet template if API not feasible'],
+          ['Incorrect BOMs distorting yield and COGS','Medium','Medium','Validate all BOMs across 3 pilot packing runs with manual weight recording before finalising in Odoo'],
+          ['EU VAT / OSS failure across 9 marketplaces','Medium','High','Engage EU VAT specialist alongside Odoo Accounting setup; OSS built into Chart of Accounts from Day 1; specific attention to UK (GBP, post-Brexit) and Sweden (SEK)'],
+          ['Organic certification traceability gap','Low','High','Activate lot/batch tracking for all seed products from Phase 1; store LU-BIO-04 certificates on Italian supplier records in Odoo'],
+          ['Staff resistance / insufficient adoption','Low–Medium','Medium','Budget 2–3 days structured training per core user; designate internal Odoo champion from management team'],
+        ],
+        [2600,1200,1200,4000]
+      ),
+      pageBreak(),
+    );
+
+    // ── 11. RECOMMENDATIONS ───────────────────────────
+    children.push(
+      h1('11.','Strategic Recommendations'), spacer(),
+      h2('Immediate Actions — Next 30 Days (No ERP Required)'), spacer(),
+      bullet('Conduct a full physical stock count across all 3PL and FBA locations. This becomes the authoritative master data baseline for Odoo migration.'),
+      bullet('Formalise a written 3PL SLA covering inventory reporting frequency, packing error rate thresholds, turnaround time from goods-in to dispatch, and escalation procedures.'),
+      bullet('Define target fill weights and acceptable weight variances for every seed SKU variant (10g, 200g, 500g per species).'),
+      bullet('Introduce a structured batch record sheet at the 3PL for each packing run: quantity in, quantity out, waste. A simple spreadsheet is a material improvement over no records.'),
+      bullet('Request a formal CalibtOS implementation quote scoped to 9 marketplaces, seed manufacturing BOMs, and organic certification traceability.'),
+      spacer(),
+      h2('Short-Term — Months 1 to 4'), spacer(),
+      bullet('Deploy Odoo Enterprise with Amazon Connector; prioritise inventory synchronisation across all nine accounts.'),
+      bullet('Configure 3PL warehouses as Odoo virtual locations immediately — stock visibility is achieved even without API integration.'),
+      bullet('Issue all future purchase orders to Italian seed suppliers and packaging suppliers through Odoo from Day 1.'),
+      bullet('Establish FBA reorder points based on sales velocity data from Amazon Seller Central reports.'),
+      spacer(),
+      h2('Medium-Term — Months 4 to 9'), spacer(),
+      bullet('Deploy Manufacturing module with BOMs for all seed SKUs; activate yield and loss tracking.'),
+      bullet('Implement all four Quality Control Points; replace subjective sense-checks with documented, measurable criteria.'),
+      bullet('Activate lot/batch tracking for all food-grade seed products; link organic certificates to Italian supplier records in Odoo.'),
+      bullet('Begin Amazon settlement reconciliation in Odoo Accounting for all nine accounts.'),
+      spacer(),
+      h2('Long-Term — Months 9 to 12+'), spacer(),
+      bullet('Enable demand forecasting using 12+ months of accumulated FBA sales data.'),
+      bullet('Evaluate Odoo Website as a direct-to-consumer channel to reduce Amazon platform dependency.'),
+      bullet('Pursue EDI integration with key 3PL providers for fully automated stock movement workflows.'),
+      bullet('Assess further marketplace expansion (Amazon.pl, Amazon.com.tr) managed end-to-end within Odoo.'),
+      pageBreak(),
+    );
+
+    // ── 12. CONCLUSION ────────────────────────────────
+    children.push(
+      h1('12.','Conclusion & Next Steps'), spacer(),
+      body('SLSK Ventures GmbH has built a credible, commercially validated multi-brand Amazon FBA operation. The market evidence is unambiguous: a Top 1,000 ranking on Amazon.de, a #1 category rank on Amazon.nl, EU organic certification across the ZenGreens range, three registered trademark brands, and nine confirmed European marketplace storefronts. The ZenGreens brand occupies a premium, mission-aligned position in the structurally growing organic food segment with strong cross-border customer reviews confirming genuine pan-European demand.'),
+      body('The business has, however, reached the operational ceiling of informal, founder-led management. Nine marketplaces, a complex dual-source seed supply chain, no formal quality framework, no loss calculation capability, and no 3PL integration cannot be sustained through spreadsheets and experience alone. At this stage, growth amplifies operational risk rather than reducing it.'),
+      body('The transition to Odoo Enterprise as a central ERP is the highest-leverage strategic investment available to SLSK. A well-executed CalibtOS implementation will unify inventory across all nine marketplace accounts, automate FBA replenishment, formalise 3PL relationships, enable accurate yield tracking and COGS calculation, satisfy EU organic traceability requirements, and — for the first time — provide SLSK\'s management with a real-time picture of profitability by brand, SKU, and market.'),
+      spacer(),
+      h2('Proposed Next Steps'), spacer(),
+      bullet('Discovery session: A structured working session with SLSK management to confirm operational data, 3PL identity, current SKU catalogue, and existing stock levels.'),
+      bullet('Formal scoping: CalibtOS will produce a detailed implementation scope document and fixed-fee project proposal covering all six phases.'),
+      bullet('Odoo instance provisioning: Deployment of a sandbox Odoo 18 Enterprise instance for demonstration and early configuration review.'),
+      bullet('Parallel go-live plan: A documented parallel operation plan to protect all nine Amazon seller accounts throughout the entire transition period.'),
+      pageBreak(),
+    );
+
+    // ── 13. DATA SOURCES ──────────────────────────────
+    children.push(
+      h1('13.','Data Sources & Verification Notes'), spacer(),
+      body('All factual claims in this document were independently verified against publicly accessible sources as of March 2026. Items marked as inferred or unverified should be confirmed with the client before use in formal contractual or planning documents.'),
+      spacer(),
+      makeTable(
+        ['Data Point','Source','Status'],
+        [
+          ['Amazon.de rank #516 (March 2026)','SellerRatings.com','✓ Verified'],
+          ['Amazon.fr rank #7,219','SellerRatings.com','✓ Verified'],
+          ['Amazon.de active since August 2018','SellerRatings.com','✓ Verified'],
+          ['1,883 reviews, 4.7-star rating (DE)','SellerRatings.com','✓ Verified'],
+          ['9 marketplace seller entities confirmed','Live Amazon product pages per marketplace (Mar 2026)','✓ Verified'],
+          ['Amazon.se: SLSK Ventures GmbH (SE)','amazon.se product page ASIN B0BNQXV3BR','✓ Verified'],
+          ['Amazon.ie: SLSK products via DE entity','amazon.ie product page (VEVOX ASIN B098TJ4VFN)','✓ Verified'],
+          ['#1 in Garden/Veg Seeds on Amazon.nl','Amazon.nl ASIN B0FXB449B7','✓ Verified'],
+          ['Legal name, address, register number','NorthData.com (HRB 103562)','✓ Verified'],
+          ['Share capital €26,000','NorthData.com','✓ Verified'],
+          ['Anno C. B. Skriver — Managing Director','NorthData.com','✓ Verified'],
+          ['French SIREN 914935374 (April 2022)','NorthData.com','✓ Verified'],
+          ['Trademarks: ZenGreens, VEVOX, SLSK Games','NorthData.com / DPMA','✓ Verified'],
+          ['Balance sheet ~€600K (2023, +30.2% YoY)','Implisense.com (from published filings)','✓ Verified'],
+          ['Italy as country of origin for seeds','Amazon.de and Amazon.nl product listings','✓ Verified'],
+          ['EU organic certification code LU-BIO-04','Amazon.co.uk product listing ASIN B0DDLJ6X71','✓ Verified'],
+          ['Odoo Enterprise Standard: €19.90/user/month','odoo.com/pricing (March 2026)','✓ Verified'],
+          ['Odoo Enterprise Custom: €29.90/user/month','odoo.com/pricing (March 2026)','✓ Verified'],
+          ['Former seller name "VEVOX Store"','SellerRatings.com','✓ Verified'],
+          ['Amazon.pl / Amazon.com.tr — no SLSK entity','Search results; no direct product page found','✗ Not confirmed'],
+          ['Full shareholder list','Gesellschafterliste at Amtsgericht Köln — paid access required','⚠ Unverified'],
+          ['Additional directors beyond Skriver','NorthData "N.N.Dewolf" — likely Schindewolf; confirm with client','⚠ Unverified'],
+          ['3PL identity and location','Not publicly disclosed','⚠ Inferred'],
+          ['Packaging supplier country of origin','Inferred as Asia from supply chain lead time structure','⚠ Inferred'],
+          ['Revenue and net profit figures','Gated behind paid Bundesanzeiger access','⚠ Unverified'],
+        ],
+        [3600,3200,2200]
+      ),
+      spacer(), spacer(),
+      new Paragraph({
+        children:[new TextRun({text:'This document was prepared by CalibtOS GmbH, Köln, as a confidential business proposal for SLSK Ventures GmbH. All data marked as verified was confirmed through independent research of publicly accessible sources as of March 2026.',size:pt(9),italics:true,color:'888888'})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:pt(12),after:pt(4)},
+        border:{top:{style:BorderStyle.SINGLE,size:6,color:'CCCCCC'}},
+      }),
+      new Paragraph({
+        children:[new TextRun({text:'© 2026 CalibtOS GmbH  |  Köln, Germany  |  Document Ref: CTOS-SLSK-2026-001',size:pt(9),italics:true,color:'888888'})],
+        alignment:AlignmentType.CENTER,
+        spacing:{before:pt(2),after:0},
+      }),
+    );
+
+    // ── BUILD DOCUMENT ────────────────────────────────
+    const doc = new Document({
+      creator:'CalibtOS GmbH',
+      title:'Odoo ERP Proposal — SLSK Ventures GmbH',
+      description:'Business Analysis & Odoo ERP Implementation Proposal prepared by CalibtOS GmbH',
+      styles:{
+        paragraphStyles:[
+          {id:'Normal',name:'Normal',run:{font:'Segoe UI',size:pt(10),color:BLACK}},
+        ],
+      },
+      sections:[{
+        properties:{
+          page:{
+            margin:{top:pt(54),right:pt(54),bottom:pt(54),left:pt(64)},
+          },
+        },
+        children,
+      }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob,'CalibtOS_Odoo_Proposal_SLSK_Ventures.docx');
+    btn.textContent='⬇  Download Proposal (.docx)';
+    btn.disabled=false;
+    ok.style.display='block';
+  } catch(e){
+    console.error(e);
+    const er=document.getElementById('er');
+    er.textContent='Error: '+e.message;
+    er.style.display='block';
+    btn.textContent='⬇  Download Proposal (.docx)';
+    btn.disabled=false;
+  }
+}
+</script>
+</body>
+</html>

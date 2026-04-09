@@ -545,13 +545,167 @@ function SlideOdooDiagram() {
   )
 }
 
+function SlideProcurement() {
+  const periods = [
+    { months: 'Jan–Mar', label: 'Planning Season',       dominant: 'Seasonality · Promotions · Set demand',          dot: 'bg-blue-400' },
+    { months: 'Apr–May', label: 'Planting Peak',         dominant: 'Virality · FBA storage limits · Lead time',      dot: 'bg-secondary' },
+    { months: 'Jun–Aug', label: 'Growing Season',        dominant: 'Supplier reliability · Shelf life caps',         dot: 'bg-emerald-500' },
+    { months: 'Sep–Oct', label: 'Autumn / Early Gifting',dominant: 'Set demand · New SKU launches',                  dot: 'bg-amber-500' },
+    { months: 'Nov–Dec', label: 'Christmas Gifting',     dominant: 'Set demand · Virality · Marketing calendar',     dot: 'bg-primary' },
+  ]
+
+  return (
+    <SlideShell>
+      <DeckHeader section="Section 07 · Procurement intelligence" />
+      <main className="flex min-h-0 flex-1 flex-col px-12 py-5">
+        <div className="mb-4 shrink-0">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">Dynamic factor framework</p>
+          <h1 className="font-headline text-4xl font-extrabold leading-tight tracking-tight text-primary">
+            Procurement Intelligence: <span className="text-secondary">How Much to Buy, When</span>
+          </h1>
+          <div className="mt-2 h-0.5 w-16 bg-secondary" />
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-12 gap-5">
+          {/* Left column */}
+          <div className="col-span-5 flex flex-col gap-4">
+            {/* Three-level weight architecture */}
+            <div className="rounded-xl border border-outline-variant/30 bg-white p-5 shadow-sm">
+              <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Weight Architecture — 3 Levels</h3>
+              <div className="space-y-1">
+                {[
+                  { n: '01', color: 'bg-primary', title: 'Global Factor Weight', sub: 'Base importance across all seeds' },
+                  { n: '02', color: 'bg-secondary', title: 'Category Modifier', sub: 'Spring planting ≠ herbs ≠ exotic' },
+                  { n: '03', color: 'bg-secondary', title: 'Period Modifier', sub: 'Jan–Mar weight set ≠ Jun–Aug weight set' },
+                ].map((item, i) => (
+                  <div key={i}>
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${item.color} text-[10px] font-bold text-white`}>{item.n}</div>
+                      <div>
+                        <div className="text-sm font-bold text-primary">{item.title}</div>
+                        <div className="text-[11px] text-on-surface-variant">{item.sub}</div>
+                      </div>
+                    </div>
+                    {i < 2 && <div className="ml-3 h-3 w-px bg-outline-variant/40" />}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 rounded-lg bg-surface-container-low px-4 py-2.5">
+                <p className="font-mono text-[11px] text-on-surface-variant">Score = Σ factor[i] × weight[cat][period]</p>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { val: '10–15', label: 'Factors' },
+                { val: '5',     label: 'Categories' },
+                { val: '5',     label: 'Periods' },
+                { val: '375',   label: 'Weight cells' },
+              ].map((s) => (
+                <div key={s.label} className="rounded-lg border border-outline-variant/30 bg-white p-2.5 text-center shadow-sm">
+                  <div className="font-headline text-xl font-extrabold text-secondary">{s.val}</div>
+                  <div className="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Phase evolution */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-outline-variant/30 bg-white p-4 shadow-sm">
+                <span className="mb-2 inline-block rounded bg-primary px-2 py-0.5 text-[9px] font-bold uppercase text-white">Phase 2</span>
+                <h4 className="mb-1 text-sm font-bold text-primary">Expert-bootstrapped</h4>
+                <p className="text-[10px] leading-relaxed text-on-surface-variant">Team ranking session → rank-decay formula → validated against Seller Central history.</p>
+              </div>
+              <div className="rounded-xl border border-secondary/30 bg-white p-4 shadow-sm ring-1 ring-secondary/10">
+                <span className="mb-2 inline-block rounded bg-secondary px-2 py-0.5 text-[9px] font-bold uppercase text-white">Phase 6</span>
+                <h4 className="mb-1 text-sm font-bold text-primary">Data-corrected</h4>
+                <p className="text-[10px] leading-relaxed text-on-surface-variant">Regression on 12 months of approved / overridden suggestions. Recalibrated annually.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right column — periods + update classes */}
+          <div className="col-span-7 flex flex-col gap-4">
+            {/* Periods — compact */}
+            <div className="rounded-xl border border-outline-variant/30 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                5 Procurement Periods — independent weight set each, 2-week smooth transition
+              </h3>
+              <div className="space-y-1.5">
+                {periods.map((p) => (
+                  <div key={p.months} className="flex items-center gap-3 rounded-md px-3 py-1.5 hover:bg-surface-container-low/60">
+                    <div className={`h-2 w-2 shrink-0 rounded-full ${p.dot}`} />
+                    <span className="w-14 shrink-0 font-mono text-[10px] text-on-surface-variant">{p.months}</span>
+                    <span className="w-28 shrink-0 text-xs font-bold text-primary">{p.label}</span>
+                    <span className="text-[10px] text-on-surface-variant">{p.dominant}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Factor update classes */}
+            <div className="rounded-xl border border-outline-variant/30 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                Factor Update Classes — each type has different value &amp; weight mechanics
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  {
+                    tag: 'Live Feed',
+                    tagColor: 'bg-blue-500',
+                    examples: 'Virality (BSR), FBA storage',
+                    value: 'Daily from SP-API',
+                    weight: 'Monthly — lag correlation against demand',
+                  },
+                  {
+                    tag: 'Rolling Window',
+                    tagColor: 'bg-emerald-500',
+                    examples: 'Seasonality, variant share',
+                    value: 'Monthly rolling recalculation',
+                    weight: 'Annual — STL variance decomposition',
+                  },
+                  {
+                    tag: 'Event-Triggered',
+                    tagColor: 'bg-amber-500',
+                    examples: 'Supplier reliability, competitor OOS',
+                    value: 'On each business event (PO delay, QC fail)',
+                    weight: 'Quarterly — stockout correlation',
+                  },
+                  {
+                    tag: 'Calendar',
+                    tagColor: 'bg-primary',
+                    examples: 'Promotions, marketplace events',
+                    value: 'Manual entry by team ≥8 weeks ahead',
+                    weight: 'Phase 6 only (needs 2+ years of events)',
+                  },
+                ].map((c) => (
+                  <div key={c.tag} className="rounded-lg border border-outline-variant/20 bg-surface-container-low/40 p-3">
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white ${c.tagColor}`}>{c.tag}</span>
+                    </div>
+                    <p className="mb-1 text-[10px] font-semibold text-primary">{c.examples}</p>
+                    <p className="text-[9px] text-on-surface-variant"><span className="font-semibold">Value:</span> {c.value}</p>
+                    <p className="text-[9px] text-on-surface-variant"><span className="font-semibold">Weight:</span> {c.weight}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+      <DeckFooter num="07" />
+    </SlideShell>
+  )
+}
+
 function Slide06() {
   return (
     <SlideShell>
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="pointer-events-none absolute inset-0 grid-bg opacity-30" />
         <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-secondary/5 blur-3xl" />
-        <DeckHeader section="Section 07 · Investment & ROI" />
+        <DeckHeader section="Section 08 · Investment & ROI" />
         <main className="relative z-10 flex min-h-0 flex-1 flex-col px-12 pb-4 pt-5">
           <div className="mb-4 flex shrink-0 items-end justify-between gap-6">
             <div>
@@ -659,7 +813,7 @@ function Slide06() {
             © 2026 <span className="font-bold text-secondary">CalibtOS</span> · Proprietary & confidential · SLSK Ventures
           </div>
           <div className="flex items-center gap-4">
-            <span className="font-headline text-sm font-bold tabular-nums text-primary">07</span>
+            <span className="font-headline text-sm font-bold tabular-nums text-primary">08</span>
             <div className="h-1 w-12 bg-primary" />
           </div>
         </footer>
@@ -671,7 +825,7 @@ function Slide06() {
 function Slide07() {
   return (
     <SlideShell>
-      <DeckHeader section="Section 08 · Next steps" />
+      <DeckHeader section="Section 09 · Next steps" />
       <div className="-mt-2 flex min-h-0 flex-1 flex-col justify-center px-12 pb-4 pt-0 selection:bg-secondary-container selection:text-on-secondary-container">
         <div className="mb-8 max-w-4xl shrink-0">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">Phase 6 · Alignment</p>
@@ -739,7 +893,7 @@ function Slide07() {
           © 2026 <span className="font-bold text-secondary">CalibtOS</span> · Proprietary & confidential · SLSK Ventures
         </div>
         <div className="flex items-center gap-4">
-          <span className="font-headline text-sm font-bold tabular-nums text-primary">08</span>
+          <span className="font-headline text-sm font-bold tabular-nums text-primary">09</span>
           <div className="h-1 w-12 bg-primary" />
         </div>
       </footer>
@@ -751,7 +905,7 @@ function Slide08() {
   return (
     <SlideShell>
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <DeckHeader section="Section 09 · Future work" />
+        <DeckHeader section="Section 10 · Future work" />
         <main className="flex min-h-0 flex-1 flex-col px-12 pb-4 pt-5">
           <div className="mb-4 shrink-0">
             <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">Post go-live · Horizon</p>
@@ -834,7 +988,7 @@ function Slide08() {
             © 2026 <span className="font-bold text-secondary">CalibtOS</span> · Proprietary & confidential · SLSK Ventures
           </div>
           <div className="flex items-center gap-4">
-            <span className="font-headline text-sm font-bold tabular-nums text-primary">09</span>
+            <span className="font-headline text-sm font-bold tabular-nums text-primary">10</span>
             <div className="h-1 w-12 bg-primary" />
           </div>
         </footer>
@@ -847,7 +1001,7 @@ function Slide08() {
 function Slide09() {
   return (
     <SlideShell>
-      <DeckHeader section="Section 10 · Closing" />
+      <DeckHeader section="Section 11 · Closing" />
       <main className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-12 text-center">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-1/2 top-1/2 h-[min(70vh,32rem)] w-[min(90vw,48rem)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-secondary/5 blur-[100px]" />
@@ -868,7 +1022,7 @@ function Slide09() {
           </div>
         </div>
       </main>
-      <DeckFooter num="10" />
+      <DeckFooter num="11" />
     </SlideShell>
   )
 }
@@ -880,6 +1034,7 @@ export const SLIDES: SlideComponent[] = [
   Slide04,
   Slide05,
   SlideOdooDiagram,
+  SlideProcurement,
   Slide06,
   Slide07,
   Slide08,
